@@ -261,7 +261,7 @@ def manual():
         GPIO.output(Acid_Pump, 0)
         
 waktu = 0
-previous_minute2 = 0
+previous_minute2 = td.minute
 
 def auto():
     global PH, EC, state_ec, state_ph, a, previousMillis, wp_state, state_over
@@ -371,7 +371,6 @@ def get_temp():
     file = open(device_file, 'r')
     lines = file.readlines()
     file.close()
-    
     trimmed_data = lines[1].find('t=')
     
     if trimmed_data != -1:
@@ -409,13 +408,17 @@ def read_sensor():
 previous_second = 0
 
 if __name__ == "__main__":
-    while True:
-        td = datetime.datetime.today()
-        previous_second = td.second
-        read_sensor()
-        simulasi()
-        if state_manual == True:
-            manual()
-        else:
-            auto()
-        time.sleep(0.2)
+    try:
+        while True:
+            td = datetime.datetime.today()
+            previous_second = td.second
+            read_sensor()
+            simulasi()
+            if state_manual == True:
+                manual()
+            else:
+                auto()
+            time.sleep(0.2)
+            
+    except KeyboardInterrupt:
+        pass
