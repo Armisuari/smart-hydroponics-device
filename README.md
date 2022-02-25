@@ -1,1 +1,1 @@
-#The main directory of this project
+Smart Hydroponics Growing System
