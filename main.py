@@ -34,7 +34,7 @@ PSK = ''
 #os.system("sudo reboot")
 
 THINGSBOARD_HOST = 'demo.thingsboard.io'
-ACCES_TOKEN = 'YnWgABN7LrZ1nsAJvxYT'
+ACCES_TOKEN = '2EANOufC7dF1Ewb2BC5O'
 
 url = 'https://demo.thingsboard.io'
 
@@ -42,9 +42,9 @@ mylcd = I2C_LCD_driver.lcd()
 
 mylcd.lcd_clear()
 mylcd.lcd_display_string('Smart Hydroponic IoT', 1, 0)
-mylcd.lcd_display_string('By Macca Lab', 2, 4)
+mylcd.lcd_display_string('   Heddow Steltz   ', 2, 0)
 mylcd.lcd_display_string('--------------------', 3, 0)
-mylcd.lcd_display_string('User: Mr.Yoki Ramdan', 4, 0)
+#mylcd.lcd_display_string('User: Mr.Yoki Ramdan', 4, 0)
 time.sleep(2)
 mylcd.lcd_clear()
 mylcd.lcd_display_string('Preparing all system', 1, 0)
@@ -118,6 +118,8 @@ except urllib.request.URLError as err:
     mylcd.lcd_display_string('(Password: admin123)', 4, 0)
     time.sleep(30)
     mylcd.lcd_clear()
+except:
+    pass
 
 sys.path.insert(0,'../libs/DFRobot_ADS1115/RaspberryPi/Python/')
 sys.path.insert(0,'../libs/GreenPonik_EC_Python_industrial_probes/src/')
@@ -171,20 +173,20 @@ EC = 0.0
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
 
-try:
-    base_dir = '/sys/bus/w1/devices/'
-    device_folder = glob.glob(base_dir + '28*')[0]
-    device_file = device_folder + '/w1_slave'
-except:
-    pass
+base_dir = '/sys/bus/w1/devices/'
+device_folder = glob.glob(base_dir + '28*')[0]
+device_file = device_folder + '/w1_slave'
+
 
 wp_state = False
 
 w = open('desired_EC.txt', 'r')
 z = open('desired_PH.txt', 'r')
+int_update = open('interval_minute.txt', 'r')
 
 desired_EC = float(w.read())
 desired_PH = float(z.read())
+interval_minute = int(int_update.read())
 
 SSID_PSK = ''
 
@@ -199,7 +201,7 @@ new_list_wifi_3 = new_list_wifi_1.replace(',', ' |')
 
 wifi = {'wifi': new_list_wifi_2, 'pass': ' '}
 
-desired_value = {'desired_EC': desired_EC, 'desired_PH': desired_PH}
+desired_value = {'desired_EC': desired_EC, 'desired_PH': desired_PH, 'interval_update':interval_minute}
 
 AB_pump = False
 Al_pump = False
@@ -212,6 +214,7 @@ state_manual = Manual_Switch
 state_manual_AB = False
 state_manual_al = False
 state_manual_ac = False
+show_ppm = False
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, rc, *extra_params):
@@ -239,7 +242,7 @@ shutdown_state = False
 def on_message(client, userdata, msg):
     global state_manual, manual_button, state_manual_water, state_manual_AB
     global state_manual_al, state_manual_ac, desired_EC, desired_PH
-    global SSID_PSK, reboot_state, reboot_state_now, shutdown_state
+    global SSID_PSK, reboot_state, reboot_state_now, shutdown_state, show_ppm
 
     print ('Topic: ' + msg.topic + '\nMessage: ' + str(msg.payload))
     # Decode JSON request
@@ -253,6 +256,8 @@ def on_message(client, userdata, msg):
             desired_EC = data['desired_EC']
         elif data_after[0] == 'desired_PH':
             desired_PH = data['desired_PH']
+        elif data_after[0] == 'interval_update':
+            interval_minute = data['interval_update']
         
         elif data_after[0] == 'pass':
             SSID_PSK=data['pass']
@@ -274,10 +279,13 @@ def on_message(client, userdata, msg):
 
         j = open('desired_PH.txt', 'w')
         i = open('desired_EC.txt','w')
+        ij = open('interval_minute.txt', 'w')
         j.write(str(desired_PH))
         i.write(str(desired_EC))
+        ij.write(str(interval_minute))
         j.close()
         i.close()
+        ij.close()
 
     else:
         if data['method'] == 'setValue_ms':
@@ -311,6 +319,11 @@ def on_message(client, userdata, msg):
                 state_manual_ac = True
             else:
                 state_manual_ac = False
+        if data['method'] == 'setValue':
+            if data['params'] == True:
+                show_ppm = True
+            else:
+                show_ppm = False
 
         if data['method'] == 'rpcCommand':
             reboot_state_now = True
@@ -335,13 +348,13 @@ client.username_pw_set(ACCES_TOKEN)
 #Connect to Thingsboard using default MQTT port
 try:
     client.connect(THINGSBOARD_HOST, 1883, 60)
-    """
+    
     mylcd.lcd_clear()
     mylcd.lcd_display_string('>>Connected to the<<', 1, 0)
     mylcd.lcd_display_string('>>>>>>>SERVER<<<<<<<', 2, 0)
     time.sleep(2)
     mylcd.lcd_clear()
-    """
+    
 except:
     pass
 
@@ -584,70 +597,65 @@ def get_temp():
         pass
 
 PH = 0.0
-temperature = 0.0
+#temperature = 0.0
 EC = 0.0
 PH2 = 0.0
+TDS = 0.0
 TDS2 = 0.0
 
 def read_sensor():
-    global ads1115, wp_state, temperature, PH2
+    global ads1115, wp_state, temperature, PH2, show_ppm
     global ec, EC, ph, PH, sensor_data, wifi_input, TDS2
-    
-    ph_sim = open('ph-sim.txt', 'r')
-    ec_sim = open('ec-sim.txt', 'r')
-    ws_sim = open('ws-sim.txt', 'r')
+
     temperature = get_temp()
     #Set the IIC address
-    ads1115.setAddr_ADS1115(0x48)
+    ads1115.set_addr_ADS1115(0x48)
     #Sets the gain and input voltage range.
-    ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
+    ads1115.set_gain(ADS1115_REG_CONFIG_PGA_6_144V)
     #Get the Digital Value of Analog of selected channel
-    adc0 = ads1115.readVoltage(0)
-    adc1 = ads1115.readVoltage(1)
+    adc0 = ads1115.read_voltage(0)
+    time.sleep(0.2)
+    adc1 = ads1115.read_voltage(1)
     #Convert voltage to EC with temperature compensation
-    EC = ec.readEC(adc1['r'],temperature)
-    PH = ph.readPH(adc0['r'])
+    #EC = ec.readEC(adc1['r'],temperature)
+    #PH = ph.readPH(adc0['r'])
+    EC = 2.3
+    EC_u = EC * 1000 # in us/cm
+    PH = 7.0
     TDS = EC * 500 # 1.0 ms/cm = 500 ppm
-    TDS2 = 0.1723*TDS+3.679
-    """
-    PH3 = 2.430*PH-10.30
-	PH2 = 0.6438*PH3-0.9918
-	"""
+    #client.publish('v1/devices/me/telemetry', json.dumps(sensor_data), 1)
 
-    if WS == 1:
-        sensor_data['Water State'] = True
+    if show_ppm == True:
+        vSelected = TDS
+        print(show_ppm)
     else:
-        sensor_data['Water State'] = False
+        vSelected = EC_u
+
+    print("Water Level:", GPIO.input(Water_Level))
+    print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f TDS/EC:%.f " %(temperature,EC, PH, vSelected))
+
+    sensor_data['Temp Value'] = temperature
+    sensor_data['Ec Value'] = vSelected
+    sensor_data['pH Value'] = PH
 
     client.publish('v1/devices/me/telemetry', json.dumps(sensor_data), 1)
-
-    if EC <= 0.5:
-        EC = 0
-
-    if PH > 10:
-        PH = 0
-
-    #EC = float(ec_sim.read())
-    #PH = float(ph_sim.read())
-    WS = int(ws_sim.read())
-    #print("Water Level:", GPIO.input(Water_Level))
-    #print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f TDS:%.f " %(temperature,EC, PH, TDS))
-    """
+    
     mylcd.lcd_display_string("Temp:%.f " %(temperature), 1, 0)
     mylcd.lcd_display_string('      ', 2, 4)
     mylcd.lcd_display_string('       ', 2, 13)
     mylcd.lcd_display_string("TDS:%.f " %(TDS), 2, 0)
     mylcd.lcd_display_string("PH:%.1f " %(PH), 2, 10)
-    """
-    return temperature, EC, PH, TDS2
-
+    
+    return temperature, EC, PH, TDS
+"""
 def rata_rata():
-    global PH, EC, TDS2, temperature, PH2
+    global PH, EC, TDS2, temperature, PH2, TDS
     data_PH =[]
     data_TDS=[]
     jum = 0
     jum1 = 0
-
+    temperature = get_temp()
+    
     for i in range(0, 5):
         PH1 = PH
         data_PH.append(PH1)
@@ -659,46 +667,57 @@ def rata_rata():
         data_TDS.append(TDS1)
         jum += data_TDS[j]
         rata21 = jum1 / 5
-
+    
     sensor_data['Temp Value'] = temperature
     sensor_data['Ec Value'] = TDS2
     sensor_data['pH Value'] = PH
 
     client.publish('v1/devices/me/telemetry', json.dumps(sensor_data), 1)
 
-    print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f TDS:%.f " %(temperature,EC, PH1, TDS1))
+    #print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f TDS:%.f " %(temperature,EC, PH, TDS1))
+    
     mylcd.lcd_display_string("Temp:%.f " %(temperature), 1, 0)
     mylcd.lcd_display_string('      ', 2, 4)
     mylcd.lcd_display_string('       ', 2, 13)
-    mylcd.lcd_display_string("TDS:%.f " %(TDS1), 2, 0)
-    mylcd.lcd_display_string("PH:%.2f " %(PH1), 2, 10)
-
+    mylcd.lcd_display_string("EC:%.2f " %(TDS), 2, 0)
+    mylcd.lcd_display_string("PH:%.2f " %(PH), 2, 10)
+""" 
 
 previous_second = 0
 previous_second1 = 0
+previous_minute3 = 0
 
 def reboot():
+    
     mylcd.lcd_clear()
+    time.sleep(1)
     mylcd.lcd_display_string('>Adding WiFi Succes<', 1, 0)
     mylcd.lcd_display_string('--------------------', 2, 0)
     time.sleep(2)
     mylcd.lcd_display_string('>>Rebooting system<<', 4, 0)
+    
     os.system("sudo reboot")
 
 def reboot_now():
+    
     mylcd.lcd_clear()
+    time.sleep(1)
     mylcd.lcd_display_string('>>Rebooting system<<', 1, 0)
     mylcd.lcd_display_string('>>>>Please Wait!<<<<', 2, 0)
     time.sleep(2)
     mylcd.lcd_display_string('--------------------', 3, 0)
+    
     os.system("sudo reboot")
 
 def shutdown():
+    
     mylcd.lcd_clear()
+    time.sleep(1)
     mylcd.lcd_display_string('>>Shutdown system<<', 1, 0)
     mylcd.lcd_display_string('>>>>Please Wait!<<<<', 2, 0)
     time.sleep(2)
     mylcd.lcd_display_string('--------------------', 3, 0)
+    
     os.system("sudo shutdown -now")
 
 if __name__ == "__main__":
@@ -712,27 +731,31 @@ if __name__ == "__main__":
                 reboot_now()
             if shutdown_state == True:
                 shutdown()
-
-            if currentMillis - previous_second1 >= 1000:
+            """
+            if currentMillis - previous_second1 >= 5000:
                 previous_second1 = currentMillis 
-                try:
-                    read_sensor()
-                except:
-                    pass
+                read_sensor()
+                simulasi()
+            """
+            if td.minute - previous_minute3 >= interval_minute:
+                previous_minute3 = td.minute
+                print(interval_minute)
+                time.sleep(1)
+                read_sensor()
+                simulasi()
                 
-
-            if currentMillis - previous_second >= 5000:
+            """
+            if currentMillis - previous_second >= 3000:
                 previous_second = currentMillis 
                 print('>>>>>>>>>>>>>Desried EC:%.1f, desired_PH:%.1f ' %(desired_EC, desired_PH))
-                rata_rata()
-                simulasi()                
-
+                rata_rata()                
+            """
             if state_manual == True:
                 manual()
             else:
                 auto()
             time.sleep(1)
-            
+                
     except KeyboardInterrupt:
         pass
         
