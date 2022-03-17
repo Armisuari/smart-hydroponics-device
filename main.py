@@ -169,6 +169,7 @@ ph.begin()
 
 PH = 0.0
 EC = 0.0
+EC_u = 0.0
 
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
@@ -183,10 +184,12 @@ wp_state = False
 w = open('desired_EC.txt', 'r')
 z = open('desired_PH.txt', 'r')
 int_update = open('interval_minute.txt', 'r')
+str_time = open('led_schedule.txt', 'r')
 
 desired_EC = float(w.read())
 desired_PH = float(z.read())
 interval_minute = int(int_update.read())
+led_schedule = str_time.read()
 
 SSID_PSK = ''
 
@@ -201,7 +204,7 @@ new_list_wifi_3 = new_list_wifi_1.replace(',', ' |')
 
 wifi = {'wifi': new_list_wifi_2, 'pass': ' '}
 
-desired_value = {'desired_EC': desired_EC, 'desired_PH': desired_PH, 'interval_update':interval_minute}
+desired_value = {'desired_EC': desired_EC, 'desired_PH': desired_PH, 'interval_update':interval_minute, 'led_schedule': led_schedule }
 
 AB_pump = False
 Al_pump = False
@@ -241,8 +244,8 @@ shutdown_state = False
 
 def on_message(client, userdata, msg):
     global state_manual, manual_button, state_manual_water, state_manual_AB
-    global state_manual_al, state_manual_ac, desired_EC, desired_PH
-    global SSID_PSK, reboot_state, reboot_state_now, shutdown_state, show_ppm
+    global state_manual_al, state_manual_ac, desired_EC, desired_PH, led_schedule
+    global SSID_PSK, reboot_state, reboot_state_now, shutdown_state, show_ppm, interval_minute
 
     print ('Topic: ' + msg.topic + '\nMessage: ' + str(msg.payload))
     # Decode JSON request
@@ -252,6 +255,8 @@ def on_message(client, userdata, msg):
 
     if msg.topic == 'v1/devices/me/attributes':
         data_after = list(data)
+        print('data_after: ', data_after[0])
+
         if data_after[0] == 'desired_EC':
             desired_EC = data['desired_EC']
         elif data_after[0] == 'desired_PH':
@@ -270,6 +275,9 @@ def on_message(client, userdata, msg):
             print("rebooting system...")
             reboot_state = True
 
+        #elif data_after[0] == 'led_schedule':
+        #    led_schedule = data['led_schedule']
+
             #SSID = data['SSID']
         """    
         elif data_after[0] == 'PSK':
@@ -280,12 +288,15 @@ def on_message(client, userdata, msg):
         j = open('desired_PH.txt', 'w')
         i = open('desired_EC.txt','w')
         ij = open('interval_minute.txt', 'w')
+        jk = open('led_schedule.txt', 'w')
         j.write(str(desired_PH))
         i.write(str(desired_EC))
         ij.write(str(interval_minute))
+        jk.write(str(led_schedule))
         j.close()
         i.close()
         ij.close()
+        jk.close()
 
     else:
         if data['method'] == 'setValue_ms':
@@ -605,7 +616,7 @@ TDS2 = 0.0
 
 def read_sensor():
     global ads1115, wp_state, temperature, PH2, show_ppm
-    global ec, EC, ph, PH, sensor_data, wifi_input, TDS2
+    global ec, EC, ph, PH, sensor_data, wifi_input, TDS, EC_u
 
     temperature = get_temp()
     #Set the IIC address
@@ -625,17 +636,11 @@ def read_sensor():
     TDS = EC * 500 # 1.0 ms/cm = 500 ppm
     #client.publish('v1/devices/me/telemetry', json.dumps(sensor_data), 1)
 
-    if show_ppm == True:
-        vSelected = TDS
-        print(show_ppm)
-    else:
-        vSelected = EC_u
-
     print("Water Level:", GPIO.input(Water_Level))
     print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f TDS/EC:%.f " %(temperature,EC, PH, vSelected))
 
     sensor_data['Temp Value'] = temperature
-    sensor_data['Ec Value'] = vSelected
+    #sensor_data['Ec Value'] = vSelected
     sensor_data['pH Value'] = PH
 
     client.publish('v1/devices/me/telemetry', json.dumps(sensor_data), 1)
@@ -643,7 +648,7 @@ def read_sensor():
     mylcd.lcd_display_string("Temp:%.f " %(temperature), 1, 0)
     mylcd.lcd_display_string('      ', 2, 4)
     mylcd.lcd_display_string('       ', 2, 13)
-    mylcd.lcd_display_string("TDS:%.f " %(TDS), 2, 0)
+    mylcd.lcd_display_string(sSelected+":%.f " %(vSelected), 2, 0)
     mylcd.lcd_display_string("PH:%.1f " %(PH), 2, 10)
     
     return temperature, EC, PH, TDS
@@ -737,6 +742,24 @@ if __name__ == "__main__":
                 read_sensor()
                 simulasi()
             """
+            if currentMillis - previous_second1 >= 1000:
+                if show_ppm == True:
+                    vSelected = TDS
+                    sSelected = "TDS"
+                else:
+                    vSelected = EC_u
+                    sSelected = "EC"
+
+                sensor_data['Ec Value'] = vSelected
+                mylcd.lcd_display_string(sSelected+":%.f " %(vSelected), 2, 0)
+                client.publish('v1/devices/me/telemetry', json.dumps(sensor_data), 1)
+                print("Show_ppm: ", show_ppm, "\nTime led: ", led_schedule)
+            """
+            if currentMillis - previous_second1 >= 1000:
+                previous_second1 = currentMillis
+                mylcd.lcd_display_string(sSelected+":%.f " %(vSelected), 2, 0)
+            """
+
             if td.minute - previous_minute3 >= interval_minute:
                 previous_minute3 = td.minute
                 print(interval_minute)
