@@ -29,15 +29,15 @@ def read_ph_ec():
 	global ph
 	temperature = 25 # or make your own temperature read process
 	#Set the IIC address
-	ads1115.setAddr_ADS1115(0x48)
+	ads1115.set_addr_ADS1115(0x48)
 	#Sets the gain and input voltage range.
-	ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
+	ads1115.set_gain(ADS1115_REG_CONFIG_PGA_6_144V)
 	#Get the Digital Value of Analog of selected channel
-	adc0 = ads1115.readVoltage(0)
-	adc1 = ads1115.readVoltage(1)
+	adc0 = ads1115.read_voltage(0)
+	adc1 = ads1115.read_voltage(1)
 	#Convert voltage to EC with temperature compensation
-	EC = ec.readEC(adc0['r'],temperature)
-	PH = ph.readPH(adc1['r'])
+	EC = ec.readEC(adc1['r'],temperature)
+	PH = ph.readPH(adc0['r'])
 	print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f " %(temperature,EC,PH))
 	return temperature, EC, PH
 

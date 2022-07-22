@@ -16,10 +16,12 @@ from DFRobot_ADS1115 import ADS1115
 from GreenPonik_EC import GreenPonik_EC
 from GreenPonik_PH import GreenPonik_PH
 import urllib.request
+import I2C_LCD_driver
 
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
 
+mylcd = I2C_LCD_driver.lcd()
 
 base_dir = '/sys/bus/w1/devices/'
 device_folder = glob.glob(base_dir + '28*')[0]
@@ -37,8 +39,12 @@ def get_temp():
         return temp_c
 
 try:
-	while True:
-		temperature = get_temp()
-		print("Temperature:%.2f ^C " %(temperature))
+    while True:
+        temperature =  get_temp()
+        print("Temperature:%.2f ^C" %(temperature))
+        mylcd.lcd_display_string('Temp: ', 1,0)
+        mylcd.lcd_display_string(str(temperature), 1,6)
+        mylcd.lcd_display_string('^C', 1,10)
+
 except KeyboardInterrupt:
     pass

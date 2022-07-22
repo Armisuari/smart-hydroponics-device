@@ -1,0 +1,17 @@
+{"config":
+  {
+    "delay":"1",
+    "connection_mode":"online",
+    "param_date_device":"date_device",
+    "param_name_1":"PH",
+    "param_name_2":"EC",
+    "param_name_3":"LED",
+    "param_name_4":"TEMP",
+    "param_status_1":true,
+    "param_status_2":true,
+    "param_status_3":true,
+    "param_status_4":true,
+    "sensor_type":"analog",
+    "calibrate_ec":"0.3"
+  }
+}

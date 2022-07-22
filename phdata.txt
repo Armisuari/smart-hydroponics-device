@@ -1,2 +1,2 @@
-neutralVoltage=2732
-acidVoltage=3080
+neutralVoltage=2700
+acidVoltage=3100

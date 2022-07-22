@@ -628,11 +628,11 @@ def read_sensor():
     time.sleep(0.2)
     adc1 = ads1115.read_voltage(1)
     #Convert voltage to EC with temperature compensation
-    #EC = ec.readEC(adc1['r'],temperature)
-    #PH = ph.readPH(adc0['r'])
-    EC = 2.3
+    EC = ec.readEC(adc1['r'],temperature)
+    PH = ph.readPH(adc0['r'])
+    #EC = 2.3
     EC_u = EC * 1000 # in us/cm
-    PH = 7.0
+    #PH = 7.0
     TDS = EC * 500 # 1.0 ms/cm = 500 ppm
     #client.publish('v1/devices/me/telemetry', json.dumps(sensor_data), 1)
 
