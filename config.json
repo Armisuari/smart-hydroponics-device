@@ -1,6 +1,6 @@
 {"config":
   {
-    "delay":"1",
+    "delay":"60",
     "connection_mode":"online",
     "param_date_device":"date_device",
     "param_name_1":"PH",

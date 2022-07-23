@@ -1,9 +1,15 @@
-import time
-import sys
-import I2C_LCD_driver
+#main code
+from asyncore import read
 import json
+import paho.mqtt.client as mqtt
+import RPi.GPIO as GPIO
+from threading import Thread
+import _thread
+import read_sensor
+import time
+import datetime
 import os
-import glob
+import I2C_LCD_driver
 
 mylcd = I2C_LCD_driver.lcd() #lcd i2c
 
@@ -33,80 +39,264 @@ print("param name 4="+param_name_1)
 print("Sensor Type="+sensor_type+"\n")
 f.close()
 
-#ADS1115 initialize
-sys.path.insert(0,'../libs/DFRobot_ADS1115/RaspberryPi/Python/')
-sys.path.insert(0,'../libs/GreenPonik_EC_Python_industrial_probes/src/')
-sys.path.insert(0,'../src/')
-ADS1115_REG_CONFIG_PGA_6_144V        = 0x00 # 6.144V range = Gain 2/3
-ADS1115_REG_CONFIG_PGA_4_096V        = 0x02 # 4.096V range = Gain 1
-ADS1115_REG_CONFIG_PGA_2_048V        = 0x04 # 2.048V range = Gain 2 (default)
-ADS1115_REG_CONFIG_PGA_1_024V        = 0x06 # 1.024V range = Gain 4
-ADS1115_REG_CONFIG_PGA_0_512V        = 0x08 # 0.512V range = Gain 8
-ADS1115_REG_CONFIG_PGA_0_256V        = 0x0A # 0.256V range = Gain 16
-from DFRobot_ADS1115 import ADS1115
-from GreenPonik_EC import GreenPonik_EC
-from GreenPonik_PH import GreenPonik_PH
-ads1115 = ADS1115()
-ec      = GreenPonik_EC()
-ph      = GreenPonik_PH()
-ec.begin()
-ph.begin()
+THINGSBOARD_HOST = 'demo.thingsboard.io'
+ACCESS_TOKEN = '6AXNZUy7XiA6UGnMOPAy'
 
-#DS18b20 Initialize
-os.system('modprobe w1-gpio')
-os.system('modprobe w1-therm')
+# Timeout to wait for connection
+WAIT_CONNECTION_TIMEOUT = 10
 
-base_dir = '/sys/bus/w1/devices/'
-device_folder = glob.glob(base_dir + '28*')[0]
-device_file = device_folder + '/w1_slave'
+# We assume that all GPIOs are LOW
+# gpio_state = {7: False, 11: False, 12: False, 13: False, 15: False, 16: False, 18: False, 22: False, 29: False,
+            #   31: False, 32: False, 33: False, 35: False, 36: False, 37: False, 38: False, 40: False}
 
-def get_temp():
-    file = open(device_file, 'r')
-    lines = file.readlines()
-    file.close()
-    trimmed_data = lines[1].find('t=')
-    
-    if trimmed_data != -1:
-        temp_string = lines[1][trimmed_data+2:]
-        temp_c = float(temp_string) / 1000.0
-        return temp_c
+water_pump = 16
+alkaline_pump = 13
+acid_pump = 19
+nutrient_a = 18
+nutrient_b = 12
+water_level = 17
 
-def read_ph_ec():
-	global ads1115, calibrate_ec
-	global ec
-	global ph
-	temperature = get_temp() #25 # or make your own temperature read process
-	#Set the IIC address
-	ads1115.set_addr_ADS1115(0x48)
-	#Sets the gain and input voltage range.
-	ads1115.set_gain(ADS1115_REG_CONFIG_PGA_6_144V)
-	#Get the Digital Value of Analog of selected channel
-	adc0 = ads1115.read_voltage(0)
-	adc1 = ads1115.read_voltage(1)
-	#Convert voltage to EC with temperature compensation
-	EC = ec.readEC(adc1['r'],temperature) - float(calibrate_ec)
-	PH = ph.readPH(adc0['r'])
-    
-	mylcd.lcd_display_string('PH: ', 1,0)
-	mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
-	mylcd.lcd_display_string('EC: ', 1,8)
-	mylcd.lcd_display_string(str('%.1f' % EC), 1,11)
-	mylcd.lcd_display_string('ms/cm', 1,14)
-	mylcd.lcd_display_string('Temp: ', 2,0)
-	mylcd.lcd_display_string(str('%.1f' % temperature), 2,5)
-    
-	print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f " %(temperature,EC,PH))
-	return temperature, EC, PH
+connected = False
 
+sensor_data = { 
+                "PH_sensor" : 0, "EC_sensor" : 0, "TEMP_sensor" : 0,
+                "water_state" : False, "last_update": ""
+              }
+
+pumps_data = {
+                water_pump: False,
+                alkaline_pump: False,
+                acid_pump: False,
+                nutrient_a: False,
+                nutrient_b: False 
+            }
+
+def millis():
+    return time.time() * 1000
+
+# The callback for when the client receives a CONNACK response from the server.
+def on_connect(client, userdata, rc, *extra_params):
+    print('Connected with result code ' + str(rc))
+    # Subscribing to receive RPC requests
+    client.subscribe('v1/devices/me/rpc/request/+')
+    # Sending current GPIO status
+    #client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
+    client.publish('v1/devices/me/attributes', get_pumps_status(), 1)
+
+    global connected
+    connected = True
+
+def on_disconnect(unused_client, unused_userdata, rc):
+    """Paho callback for when a device disconnects."""
+    print(f"Disconnected with result code " + str(rc))
+    print()
+
+    global connected
+    connected = False
+
+def on_publish(client, userdata, mid):
+    """Paho callback when a message is sent to the broker."""
+    print('on_publish')
+    print("userdata:" + str(userdata))
+    print("mid:" + str(mid))
+    print()
+
+# The callback for when a PUBLISH message is received from the server.
+def on_message(client, userdata, msg):
+    print ('Topic: ' + msg.topic + '\nMessage: ' + str(msg.payload))
+    # Decode JSON request
+    data = json.loads(msg.payload)
+    # Check request method
+    # if data['method'] == 'getGpioStatus':
+    #     # Reply with GPIO status
+    #     client.publish(msg.topic.replace('request', 'response'), get_gpio_status(), 1)
+    # elif data['method'] == 'setGpioStatus':
+    #     # Update GPIO status and reply
+    #     set_gpio_status(data['params']['pin'], data['params']['enabled'])
+    #     client.publish(msg.topic.replace('request', 'response'), get_gpio_status(), 1)
+    #     client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
+
+    if data['method'] == 'getPumpsStatus':
+        client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
+    elif data['method'] == 'setPumpsStatus':
+        set_pumps_status(data['params']['pin'], data['params']['enabled'])
+        client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
+        client.publish('v1/devices/me/attributes', get_pumps_status(), 1)
+
+
+# def get_gpio_status():
+#     # Encode GPIOs state to json
+#     return json.dumps(gpio_state)
+
+def get_pumps_status():
+    return json.dumps(pumps_data)
+
+# def set_gpio_status(pin, status):
+#     # Output GPIOs state
+#     GPIO.output(pin, GPIO.HIGH if status else GPIO.LOW)
+#     # Update GPIOs state
+#     gpio_state[pin] = status
+
+def set_pumps_status(pin, status):
+    GPIO.output(pin, GPIO.HIGH if status else GPIO.LOW)
+    pumps_data[pin] = status
+
+# Using board GPIO layout
+# GPIO.setmode(GPIO.BOARD)
+# GPIO.setwarnings(False)
+# for pin in gpio_state:
+#     # Set output mode for all GPIO pins
+#     GPIO.setup(pin, GPIO.OUT)
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+for pin in pumps_data:
+    GPIO.setup(pin, GPIO.OUT)
+GPIO.setup(water_level, GPIO.IN)
+
+client = mqtt.Client()
+# Register connect callback
+client.on_connect = on_connect
+# Registed publish message callback
+client.on_message = on_message
+# Set access token
+client.username_pw_set(ACCESS_TOKEN)
+# Connect to ThingsBoard using default MQTT port and 60 seconds keepalive interval
+client.connect(THINGSBOARD_HOST, 1883, 60)
+client.loop_start()
+
+PH = 0.0
+EC = 0.0
+TEMP = 0.0
+water = 0
+date_time = ''
+
+def publish_events():
+    """Publish an event."""
+    print()
+    print("Publish Events")
+    print("================================================")
+    print()
+
+    # client = get_client()
+
+    # Publish to the events
+    # mqtt_topic = f"/devices/{DEVICE_ID}/events"
+
+    # payload = {"{}".format(param_date_device):date_time,
+    #            "{}".format(param_name_1):data_1,
+    #            "{}".format(param_name_2):data_2,
+    #            "{}".format(param_name_3):data_3,
+    #            "{}".format(param_name_4):data_4,}
+
+    sensor_data['last_update'] = date_time
+    sensor_data['PH_sensor'] = PH
+    sensor_data['EC_sensor'] = EC
+    sensor_data['TEMP_sensor'] = TEMP
+    sensor_data['water_state'] = water
+
+    # Publish something
+    print("Publishing to Cloud Dashboard")
+    print("data " + str(sensor_data))
+    print("Current delay : %s second" %(delay_device))
+    print()
+    # Publish "payload" to the MQTT topic. qos=1 means at least once
+    # delivery. Cloud IoT Core also supports qos=0 for at most once
+    # delivery.
+    # message = client.publish(mqtt_topic, json.dumps(payload), qos=1)   
+    # message = client.publish('v1/devices/me/attributes', json.dumps(sensor_data), 1)
+    client.publish('v1/devices/me/attributes', json.dumps(sensor_data), 1)
+    # if message.wait_for_publish():
+    #     release_client(client)
+    #     return False
+    # else:
+    #     release_client(client)
+
+def sensor_handle():
+    global PH,EC,TEMP,water
+    PH = read_sensor.read_ph()
+    EC = read_sensor.read_ec()
+    try:
+        TEMP = read_sensor.get_temp()
+    except Exception:
+        TEMP = 25
+    water = GPIO.input(water_level)
+
+def sensor_live(threadName, delay):
+    while True:
+        sensor_handle()
+        print("running local...")
+        mylcd.lcd_display_string('PH: ', 1,0)
+        mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
+        mylcd.lcd_display_string('EC: ', 1,8)
+        mylcd.lcd_display_string(str('%.1f' % EC), 1,11)
+        mylcd.lcd_display_string('ms/cm', 1,15)
+        mylcd.lcd_display_string('Temp: ', 2,0)
+        mylcd.lcd_display_string(str('%.f' % TEMP), 2,5)
+        time.sleep(delay)
+
+def sensor_update(threadName, delay):
+    while True:
+        #Read sensor
+        sensor_handle()
+        now = datetime.datetime.now()
+        global date_time
+        date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
+        print ("Current date and time : ")
+        print (date_time)
+
+        response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
+
+        if response == 0:
+            print ("********************************************************************")
+            print(THINGSBOARD_HOST, 'is UP and reachable!')
+            print ("********************************************************************")
+            print ("\n")
+
+            if not publish_events():
+                print("Succes send to dashboard")
+            else:
+                print("Failed send to dashboard")
+
+        elif response == 2 or 256 or 512:
+            print ("********************************************************************")
+            print(THINGSBOARD_HOST, 'is DOWN and No response from Server!')
+            print ("********************************************************************")
+            print ("\n")
+            now = datetime.datetime.now()
+            date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
+            print ("Current date and time : ")
+            print (date_time)
+            print("Current delay : ")
+            print(delay)
+        else:
+            print ("********************************************************************")
+            print(THINGSBOARD_HOST, 'is DOWN and Host Unreachable!')
+            print ("********************************************************************")
+            print ("\n")
+            now = datetime.datetime.now()
+            date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
+            print ("Current date and time : ")
+            print (date_time)
+            print("Current delay : ")
+            print(delay)
+
+        time.sleep(int(delay))
 
 try:
-    while True:
-        f = open('config.json')
-        data = json.load(f)
-        delay_device = data['config']['delay']
-        calibrate_ec = data['config']['calibrate_ec']
+    # while True:
+    #     task_sensor = Thread(target=sensor_hendle(delay_device))
+    #     task_sensor.start()
+    _thread .start_new_thread( sensor_live, ("Thread-sensor-live", 2, ) )
+    _thread .start_new_thread( sensor_update, ("Thread-sensor-update", int(delay_device), ) )
 
-        read_ph_ec()
-        time.sleep(int(delay_device))
 except KeyboardInterrupt:
-	pass
+    print ("Error: unable to start thread")
+
+while 1:
+    pass
+
+client.loop_stop()
+client.disconnect()
+GPIO.cleanup()
