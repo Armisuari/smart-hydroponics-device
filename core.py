@@ -10,14 +10,17 @@ import time
 import datetime
 import os
 import I2C_LCD_driver
+import pumps_state
 
 mylcd = I2C_LCD_driver.lcd() #lcd i2c
+water_level = 17 #pin GPIO
 
 # Opening JSON file
 #f = open(path_url+'config.json')  #for asus
 f = open('config.json') #for dev
 data = json.load(f)
-delay_device = (data['config']['delay']) 
+delay_device = (data['config']['delay_device'])
+delay_update = data['config']['delay_update'] 
 connection_mode = data['config']['connection_mode']
 param_date_device = data['config']['param_date_device']
 param_name_1 = data['config']['param_name_1']
@@ -30,6 +33,7 @@ param_status_3 = data['config']['param_status_3']
 param_status_4 = data['config']['param_status_4']
 sensor_type = data['config']['sensor_type']
 calibrate_ec = data['config']['calibrate_ec']
+calibrate_ph = data['config']['calibrate_ph']
 print("delay device="+delay_device)
 print("connection mode="+connection_mode)
 print("param name 1="+param_name_1)
@@ -49,27 +53,12 @@ WAIT_CONNECTION_TIMEOUT = 10
 # gpio_state = {7: False, 11: False, 12: False, 13: False, 15: False, 16: False, 18: False, 22: False, 29: False,
             #   31: False, 32: False, 33: False, 35: False, 36: False, 37: False, 38: False, 40: False}
 
-water_pump = 16
-alkaline_pump = 13
-acid_pump = 19
-nutrient_a = 18
-nutrient_b = 12
-water_level = 17
-
 connected = False
 
 sensor_data = { 
                 "PH_sensor" : 0, "EC_sensor" : 0, "TEMP_sensor" : 0,
                 "water_state" : False, "last_update": ""
               }
-
-pumps_data = {
-                water_pump: False,
-                alkaline_pump: False,
-                acid_pump: False,
-                nutrient_a: False,
-                nutrient_b: False 
-            }
 
 def millis():
     return time.time() * 1000
@@ -81,7 +70,8 @@ def on_connect(client, userdata, rc, *extra_params):
     client.subscribe('v1/devices/me/rpc/request/+')
     # Sending current GPIO status
     #client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
-    client.publish('v1/devices/me/attributes', get_pumps_status(), 1)
+    client.publish('v1/devices/me/attributes', pumps_state.get_pumps(), 1)
+
 
     global connected
     connected = True
@@ -105,7 +95,7 @@ def on_publish(client, userdata, mid):
 def on_message(client, userdata, msg):
     print ('Topic: ' + msg.topic + '\nMessage: ' + str(msg.payload))
     # Decode JSON request
-    data = json.loads(msg.payload)
+    data_in = json.loads(msg.payload)
     # Check request method
     # if data['method'] == 'getGpioStatus':
     #     # Reply with GPIO status
@@ -116,30 +106,33 @@ def on_message(client, userdata, msg):
     #     client.publish(msg.topic.replace('request', 'response'), get_gpio_status(), 1)
     #     client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
 
-    if data['method'] == 'getPumpsStatus':
-        client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
-    elif data['method'] == 'setPumpsStatus':
-        set_pumps_status(data['params']['pin'], data['params']['enabled'])
-        client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
-        client.publish('v1/devices/me/attributes', get_pumps_status(), 1)
+    # if data_in['method'] == 'getPumpsStatus':
+    #     client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
+    # elif data_in['method'] == 'setPumpsStatus':
+    #     set_pumps_status(data_in['params']['pin'], data_in['params']['enabled'])
+    #     client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
+    #     client.publish('v1/devices/me/attributes', get_pumps_status(), 1)
+
+    global water_pump, alkaline_pump, acid_pump, nutrient_a, nutrient_b
+
+    if msg.topic == 'v1/devices/me/attributes':
+        print(data_in)
+
+    if data_in['method'] == 'get_water':
+        client.publish(msg.topic.replace('request', 'response'), pumps_state.get_water(), 1)
+    elif data_in['method'] == 'set_water':
+        pumps_state.set_water(data_in['params'])
 
 
 # def get_gpio_status():
 #     # Encode GPIOs state to json
 #     return json.dumps(gpio_state)
 
-def get_pumps_status():
-    return json.dumps(pumps_data)
-
 # def set_gpio_status(pin, status):
 #     # Output GPIOs state
 #     GPIO.output(pin, GPIO.HIGH if status else GPIO.LOW)
 #     # Update GPIOs state
 #     gpio_state[pin] = status
-
-def set_pumps_status(pin, status):
-    GPIO.output(pin, GPIO.HIGH if status else GPIO.LOW)
-    pumps_data[pin] = status
 
 # Using board GPIO layout
 # GPIO.setmode(GPIO.BOARD)
@@ -151,8 +144,6 @@ def set_pumps_status(pin, status):
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
-for pin in pumps_data:
-    GPIO.setup(pin, GPIO.OUT)
 GPIO.setup(water_level, GPIO.IN)
 
 client = mqtt.Client()
@@ -199,7 +190,7 @@ def publish_events():
     # Publish something
     print("Publishing to Cloud Dashboard")
     print("data " + str(sensor_data))
-    print("Current delay : %s second" %(delay_device))
+    print("Current delay update : %s second" %(delay_update))
     print()
     # Publish "payload" to the MQTT topic. qos=1 means at least once
     # delivery. Cloud IoT Core also supports qos=0 for at most once
@@ -215,7 +206,7 @@ def publish_events():
 
 def sensor_handle():
     global PH,EC,TEMP,water
-    PH = read_sensor.read_ph()
+    PH = read_sensor.read_ph() + float(calibrate_ph)
     EC = read_sensor.read_ec()
     try:
         TEMP = read_sensor.get_temp()
@@ -225,15 +216,28 @@ def sensor_handle():
 
 def sensor_live(threadName, delay):
     while True:
+        global delay_device, delay_update
+        global calibrate_ec, calibrate_ph
+        f = open('config.json') #for dev
+        data = json.load(f)
+        delay_device = (data['config']['delay_device'])
+        delay_update = data['config']['delay_update']
+        calibrate_ec = data['config']['calibrate_ec']
+        calibrate_ph = data['config']['calibrate_ph']
+        f.close()
+
         sensor_handle()
         print("running local...")
+        print('\n\n///////////////////////////////////////Pumps state/////////////////////////////////')
+        print(pumps_state.pumps_info)
+        print('///////////////////////////////////////////////////////////////////////////////////////\n')
         
         response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
         if response == 0:
             stat = 'ONLINE '
         else:
             stat = 'OFFLINE'
-        
+        print("Current delay_device: ", delay_device)
         mylcd.lcd_display_string('PH: ', 1,0)
         mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
         mylcd.lcd_display_string('EC: ', 1,8)
@@ -300,9 +304,9 @@ try:
     # while True:
     #     task_sensor = Thread(target=sensor_hendle(delay_device))
     #     task_sensor.start()
-    _thread .start_new_thread( sensor_live, ("Thread-sensor-live", 2, ) )
-    time.sleep(1)
-    _thread .start_new_thread( sensor_update, ("Thread-sensor-update", int(delay_device), ) )
+    _thread .start_new_thread( sensor_live, ("Thread-sensor-live", int(delay_device), ) )
+    time.sleep(1) #fix bug lcd 
+    _thread .start_new_thread( sensor_update, ("Thread-sensor-update", int(delay_update), ) )
 
 except KeyboardInterrupt:
     print ("Error: unable to start thread")

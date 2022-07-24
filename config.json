@@ -1,6 +1,7 @@
 {"config":
   {
-    "delay":"60",
+    "delay_update":"120",
+    "delay_device":"3",
     "connection_mode":"online",
     "param_date_device":"date_device",
     "param_name_1":"PH",
@@ -12,6 +13,7 @@
     "param_status_3":true,
     "param_status_4":true,
     "sensor_type":"analog",
-    "calibrate_ec":"0.3"
+    "calibrate_ec":"0.0",
+    "calibrate_ph": "0.5"
   }
 }
