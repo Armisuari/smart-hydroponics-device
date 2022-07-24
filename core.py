@@ -227,6 +227,13 @@ def sensor_live(threadName, delay):
     while True:
         sensor_handle()
         print("running local...")
+        
+        response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
+        if response == 0:
+            stat = 'ONLINE '
+        else:
+            stat = 'OFFLINE'
+        
         mylcd.lcd_display_string('PH: ', 1,0)
         mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
         mylcd.lcd_display_string('EC: ', 1,8)
@@ -234,6 +241,8 @@ def sensor_live(threadName, delay):
         mylcd.lcd_display_string('ms/cm', 1,15)
         mylcd.lcd_display_string('Temp: ', 2,0)
         mylcd.lcd_display_string(str('%.f' % TEMP), 2,5)
+        mylcd.lcd_display_string('Stat: ', 4,7)
+        mylcd.lcd_display_string(stat, 4,12)
         time.sleep(delay)
 
 def sensor_update(threadName, delay):
@@ -253,7 +262,8 @@ def sensor_update(threadName, delay):
             print(THINGSBOARD_HOST, 'is UP and reachable!')
             print ("********************************************************************")
             print ("\n")
-
+            global connected
+            connected = True
             if not publish_events():
                 print("Succes send to dashboard")
             else:
@@ -264,6 +274,7 @@ def sensor_update(threadName, delay):
             print(THINGSBOARD_HOST, 'is DOWN and No response from Server!')
             print ("********************************************************************")
             print ("\n")
+            connected = False
             now = datetime.datetime.now()
             date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
             print ("Current date and time : ")
@@ -275,6 +286,7 @@ def sensor_update(threadName, delay):
             print(THINGSBOARD_HOST, 'is DOWN and Host Unreachable!')
             print ("********************************************************************")
             print ("\n")
+            connected = False
             now = datetime.datetime.now()
             date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
             print ("Current date and time : ")
@@ -289,6 +301,7 @@ try:
     #     task_sensor = Thread(target=sensor_hendle(delay_device))
     #     task_sensor.start()
     _thread .start_new_thread( sensor_live, ("Thread-sensor-live", 2, ) )
+    time.sleep(1)
     _thread .start_new_thread( sensor_update, ("Thread-sensor-update", int(delay_device), ) )
 
 except KeyboardInterrupt:

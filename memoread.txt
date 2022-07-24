@@ -1,0 +1,2 @@
+for check running background >> ps -e | grep python3
+for runnung on backgroung >> nohup &
