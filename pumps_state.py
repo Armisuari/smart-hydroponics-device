@@ -36,5 +36,30 @@ def set_water(state):
     print("WATER PUMP IS ON") if state == True else print("WATER PUMP IS OFF")
     pumps_state[water_pump] = state
     pumps_info['water pump'] = state
+
+def set_alkaline(state):
+    GPIO.output(alkaline_pump, GPIO.HIGH if state == True else GPIO.LOW)
+    print("ALKALINE PUMP IS ON") if state == True else print("ALKALINE PUMP IS OFF")
+    pumps_state[alkaline_pump] = state
+    pumps_info['alkaline pump'] = state
+
+def set_acid(state):
+    GPIO.output(acid_pump, GPIO.HIGH if state == True else GPIO.LOW)
+    print("ACID PUMP IS ON") if state == True else print("ACID PUMP IS OFF")
+    pumps_state[acid_pump] = state
+    pumps_info['acid pump'] = state
+
+def set_nutrient_a(state):
+    GPIO.output(nutrient_a, GPIO.HIGH if state == True else GPIO.LOW)
+    print("NUTRIENT A PUMP IS ON") if state == True else print("NUTRIENT A PUMP IS OFF")
+    pumps_state[nutrient_a] = state
+    pumps_info['nutrient A'] = state
+
+def set_nutrient_b(state):
+    GPIO.output(nutrient_b, GPIO.HIGH if state == True else GPIO.LOW)
+    print("NUTRIENT B PUMP IS ON") if state == True else print("NUTRIENT B PUMP IS OFF")
+    pumps_state[nutrient_b] = state
+    pumps_info['nutrient B'] = state
+
 def get_pumps():
     return json.dumps(pumps_state)

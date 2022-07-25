@@ -115,13 +115,18 @@ def on_message(client, userdata, msg):
 
     global water_pump, alkaline_pump, acid_pump, nutrient_a, nutrient_b
 
-    if msg.topic == 'v1/devices/me/attributes':
-        print(data_in)
-
-    if data_in['method'] == 'get_water':
-        client.publish(msg.topic.replace('request', 'response'), pumps_state.get_water(), 1)
-    elif data_in['method'] == 'set_water':
+    if data_in['method'] == 'set_water':
         pumps_state.set_water(data_in['params'])
+    elif data_in['method'] == 'set_alkaline':
+        pumps_state.set_alkaline(data_in['params'])
+    elif data_in['method'] == 'set_acid':
+        pumps_state.set_acid(data_in['params'])
+    elif data_in['method'] == 'set_nutrient_a':
+        pumps_state.set_nutrient_a(data_in['params'])
+    elif data_in['method'] == 'set_nutrient_b':
+        pumps_state.set_nutrient_b(data_in['params'])
+    else:
+        client.publish(msg.topic.replace('request', 'response'), pumps_state.get_pumps(), 1)
 
 
 # def get_gpio_status():
