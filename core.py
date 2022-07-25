@@ -123,7 +123,7 @@ def on_message(client, userdata, msg):
         pumps_state.set_acid(data_in['params'])
     elif data_in['method'] == 'set_nutrient_a':
         pumps_state.set_nutrient_a(data_in['params'])
-    elif data_in['method'] == 'set_nutrient_b':
+    elif data_in['method'] == 'set_nutrient_b': #
         pumps_state.set_nutrient_b(data_in['params'])
     else:
         client.publish(msg.topic.replace('request', 'response'), pumps_state.get_pumps(), 1)
