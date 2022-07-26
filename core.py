@@ -64,6 +64,7 @@ def on_connect(client, userdata, rc, *extra_params):
     # Sending current GPIO status
     #client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
     client.publish('v1/devices/me/attributes', pumps_state.get_pumps(), 1)
+    client.publish('v1/devices/me/attributes', pumps_state.get_led(), 1)
 
 
     global connected
@@ -116,6 +117,8 @@ def on_message(client, userdata, msg):
         pumps_state.set_nutrient_a(data_in['params'])
     elif data_in['method'] == 'set_nutrient_b':
         pumps_state.set_nutrient_b(data_in['params'])
+    elif data_in['method'] == 'set_led':
+        pumps_state.set_led(data_in['params'])
     else:
         client.publish(msg.topic.replace('request', 'response'), pumps_state.get_pumps(), 1)
 
@@ -224,6 +227,7 @@ def sensor_live(threadName, delay):
         print("running local...")
         print('\n\n///////////////////////////////////////Pumps state/////////////////////////////////')
         print(pumps_state.pumps_info)
+        print(pumps_state.led_state)
         print('///////////////////////////////////////////////////////////////////////////////////////\n')
         
         response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
