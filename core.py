@@ -2,7 +2,6 @@
 from asyncore import read
 import json
 import paho.mqtt.client as mqtt
-import RPi.GPIO as GPIO
 from threading import Thread
 import _thread
 import read_sensor
@@ -13,7 +12,6 @@ import I2C_LCD_driver
 import pumps_state
 
 mylcd = I2C_LCD_driver.lcd() #lcd i2c
-water_level = 17 #pin GPIO
 
 # Opening JSON file
 #f = open(path_url+'config.json')  #for asus
@@ -54,11 +52,6 @@ WAIT_CONNECTION_TIMEOUT = 10
             #   31: False, 32: False, 33: False, 35: False, 36: False, 37: False, 38: False, 40: False}
 
 connected = False
-
-sensor_data = { 
-                "PH_sensor" : 0, "EC_sensor" : 0, "TEMP_sensor" : 0,
-                "water_state" : False, "last_update": ""
-              }
 
 def millis():
     return time.time() * 1000
@@ -113,8 +106,6 @@ def on_message(client, userdata, msg):
     #     client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
     #     client.publish('v1/devices/me/attributes', get_pumps_status(), 1)
 
-    global water_pump, alkaline_pump, acid_pump, nutrient_a, nutrient_b
-
     if data_in['method'] == 'set_water':
         pumps_state.set_water(data_in['params'])
     elif data_in['method'] == 'set_alkaline':
@@ -123,7 +114,7 @@ def on_message(client, userdata, msg):
         pumps_state.set_acid(data_in['params'])
     elif data_in['method'] == 'set_nutrient_a':
         pumps_state.set_nutrient_a(data_in['params'])
-    elif data_in['method'] == 'set_nutrient_b': #
+    elif data_in['method'] == 'set_nutrient_b':
         pumps_state.set_nutrient_b(data_in['params'])
     else:
         client.publish(msg.topic.replace('request', 'response'), pumps_state.get_pumps(), 1)
@@ -146,11 +137,6 @@ def on_message(client, userdata, msg):
 #     # Set output mode for all GPIO pins
 #     GPIO.setup(pin, GPIO.OUT)
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setwarnings(False)
-
-GPIO.setup(water_level, GPIO.IN)
-
 client = mqtt.Client()
 # Register connect callback
 client.on_connect = on_connect
@@ -167,6 +153,7 @@ EC = 0.0
 TEMP = 0.0
 water = 0
 date_time = ''
+water_info = ""
 
 def publish_events():
     """Publish an event."""
@@ -186,15 +173,17 @@ def publish_events():
     #            "{}".format(param_name_3):data_3,
     #            "{}".format(param_name_4):data_4,}
 
-    sensor_data['last_update'] = date_time
-    sensor_data['PH_sensor'] = PH
-    sensor_data['EC_sensor'] = EC
-    sensor_data['TEMP_sensor'] = TEMP
-    sensor_data['water_state'] = water
+    read_sensor.sensor_data['last_update'] = date_time
+    read_sensor.sensor_data['PH_sensor'] = PH
+    read_sensor.sensor_data['EC_sensor'] = EC
+    read_sensor.sensor_data['TEMP_sensor'] = TEMP
+
+    water_info = "HIGH" if water == True else "LOW"
+    read_sensor.sensor_data['water_state'] = water_info
 
     # Publish something
     print("Publishing to Cloud Dashboard")
-    print("data " + str(sensor_data))
+    print("data " + str(read_sensor.sensor_data))
     print("Current delay update : %s second" %(delay_update))
     print()
     # Publish "payload" to the MQTT topic. qos=1 means at least once
@@ -202,7 +191,7 @@ def publish_events():
     # delivery.
     # message = client.publish(mqtt_topic, json.dumps(payload), qos=1)   
     # message = client.publish('v1/devices/me/attributes', json.dumps(sensor_data), 1)
-    client.publish('v1/devices/me/attributes', json.dumps(sensor_data), 1)
+    client.publish('v1/devices/me/attributes', json.dumps(read_sensor.sensor_data), 1)
     # if message.wait_for_publish():
     #     release_client(client)
     #     return False
@@ -217,7 +206,7 @@ def sensor_handle():
         TEMP = read_sensor.get_temp()
     except Exception:
         TEMP = 25
-    water = GPIO.input(water_level)
+    water = bool(read_sensor.read_water_level())
 
 def sensor_live(threadName, delay):
     while True:
@@ -243,6 +232,7 @@ def sensor_live(threadName, delay):
         else:
             stat = 'OFFLINE'
         print("Current delay_device: ", delay_device)
+
         mylcd.lcd_display_string('PH: ', 1,0)
         mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
         mylcd.lcd_display_string('EC: ', 1,8)
@@ -250,6 +240,13 @@ def sensor_live(threadName, delay):
         mylcd.lcd_display_string('ms/cm', 1,15)
         mylcd.lcd_display_string('Temp: ', 2,0)
         mylcd.lcd_display_string(str('%.f' % TEMP), 2,5)
+        mylcd.lcd_display_string('Water:', 2,8)
+
+        if water == True:
+            mylcd.lcd_display_string("HIGH", 2,14)
+        else:
+            mylcd.lcd_display_string("LOW ", 2,14)
+        
         mylcd.lcd_display_string('Stat: ', 4,7)
         mylcd.lcd_display_string(stat, 4,12)
         time.sleep(delay)
@@ -321,4 +318,4 @@ while 1:
 
 client.loop_stop()
 client.disconnect()
-GPIO.cleanup()
+read_sensor.GPIO.cleanup()

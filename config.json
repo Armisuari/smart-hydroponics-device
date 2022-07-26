@@ -1,6 +1,6 @@
 {"config":
   {
-    "delay_update":"120",
+    "delay_update":"10",
     "delay_device":"3",
     "connection_mode":"online",
     "param_date_device":"date_device",

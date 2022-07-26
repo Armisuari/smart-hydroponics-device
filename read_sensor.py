@@ -3,8 +3,13 @@ import I2C_LCD_driver
 import os
 import glob
 from multiprocessing import connection
+import RPi.GPIO as GPIO
 
 mylcd = I2C_LCD_driver.lcd() #lcd i2c
+
+water_level = 17 #pin GPIO
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(water_level, GPIO.IN)
 
 #ADS1115 initialize
 sys.path.insert(0,'../libs/DFRobot_ADS1115/RaspberryPi/Python/')
@@ -41,6 +46,11 @@ try:
 except Exception:
 	pass
 
+sensor_data = { 
+                "PH_sensor" : 0, "EC_sensor" : 0, "TEMP_sensor" : 0,
+                "water_state" : "LOW", "last_update": ""
+              }
+
 def get_temp():
     file = open(device_file, 'r')
     lines = file.readlines()
@@ -74,6 +84,10 @@ def read_ec():
 	# mylcd.lcd_display_string(str('%.1f' % temperature), 2,5)
 	# print("Temperature:%.1f ^C EC:%.2f ms/cm " %(temperature,EC))
 	return EC
+
+def read_water_level():
+	water = GPIO.input(water_level)
+	return water
 
 
 # try:
