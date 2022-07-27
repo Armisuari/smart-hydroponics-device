@@ -119,6 +119,8 @@ def on_message(client, userdata, msg):
         pumps_state.set_nutrient_b(data_in['params'])
     elif data_in['method'] == 'set_led':
         pumps_state.set_led(data_in['params'])
+    elif data_in['method'] == 'set_ec_tds':
+        read_sensor.set_ec_tds(data_in['params'])
     else:
         client.publish(msg.topic.replace('request', 'response'), pumps_state.get_pumps(), 1)
 
@@ -153,6 +155,7 @@ client.loop_start()
 
 PH = 0.0
 EC = 0.0
+TDS = 0
 TEMP = 0.0
 water = 0
 date_time = ''
@@ -178,7 +181,12 @@ def publish_events():
 
     read_sensor.sensor_data['last_update'] = date_time
     read_sensor.sensor_data['PH_sensor'] = PH
-    read_sensor.sensor_data['EC_sensor'] = EC
+    
+    if read_sensor.sensor_data["ec_tds"] == False:
+        read_sensor.sensor_data['EC_sensor'] = EC*1000
+    else:
+        read_sensor.sensor_data['EC_sensor'] = int(TDS)
+
     read_sensor.sensor_data['TEMP_sensor'] = TEMP
 
     water_info = "HIGH" if water == True else "LOW"
@@ -202,9 +210,10 @@ def publish_events():
     #     release_client(client)
 
 def sensor_handle():
-    global PH,EC,TEMP,water
+    global PH,EC,TEMP,water,TDS
     PH = read_sensor.read_ph() + float(calibrate_ph)
     EC = read_sensor.read_ec()
+    TDS = EC*500
     try:
         TEMP = read_sensor.get_temp()
     except Exception:
@@ -239,9 +248,16 @@ def sensor_live(threadName, delay):
 
         mylcd.lcd_display_string('PH: ', 1,0)
         mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
-        mylcd.lcd_display_string('EC: ', 1,8)
-        mylcd.lcd_display_string(str('%.1f' % EC), 1,11)
-        mylcd.lcd_display_string('ms/cm', 1,15)
+
+        if read_sensor.sensor_data["ec_tds"] == False:
+            mylcd.lcd_display_string('EC: ', 1,8)
+            mylcd.lcd_display_string(str('%.1f' % EC*1000), 1,11)
+            mylcd.lcd_display_string('us/cm', 1,15)
+        else:
+            mylcd.lcd_display_string('TDS: ', 1,7)
+            mylcd.lcd_display_string(str('%d' % TDS), 1,11)
+            mylcd.lcd_display_string('ppm', 1,16)
+
         mylcd.lcd_display_string('Temp: ', 2,0)
         mylcd.lcd_display_string(str('%.f' % TEMP), 2,5)
         mylcd.lcd_display_string('Water:', 2,8)

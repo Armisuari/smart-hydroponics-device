@@ -48,8 +48,11 @@ except Exception:
 
 sensor_data = { 
                 "PH_sensor" : 0, "EC_sensor" : 0, "TEMP_sensor" : 0,
-                "water_state" : "LOW", "last_update": ""
+                "water_state" : "LOW", "last_update": "", "ec_tds": False
               }
+
+def set_ec_tds(state):
+	sensor_data["ec_tds"] = state
 
 def get_temp():
     file = open(device_file, 'r')
