@@ -157,6 +157,7 @@ PH = 0.0
 EC = 0.0
 TDS = 0
 TEMP = 0.0
+prev_ec = 0.0
 water = 0
 date_time = ''
 water_info = ""
@@ -210,9 +211,16 @@ def publish_events():
     #     release_client(client)
 
 def sensor_handle():
-    global PH,EC,TEMP,water,TDS
+    global PH,EC,TEMP,water,TDS, EC_e, geser, EC_str
     PH = read_sensor.read_ph() + float(calibrate_ph)
     EC = read_sensor.read_ec()
+
+    if EC < 1: EC = 0
+
+    EC_e = EC * 1000
+
+    EC_str = str(EC_e)
+
     TDS = EC*500
     try:
         TEMP = read_sensor.get_temp()
@@ -223,7 +231,7 @@ def sensor_handle():
 def sensor_live(threadName, delay):
     while True:
         global delay_device, delay_update
-        global calibrate_ec, calibrate_ph
+        global calibrate_ec, calibrate_ph, prev_ec
         f = open('config.json') #for dev
         data = json.load(f)
         delay_device = (data['config']['delay_device'])
@@ -246,29 +254,40 @@ def sensor_live(threadName, delay):
             stat = 'OFFLINE'
         print("Current delay_device: ", delay_device)
 
+        # mylcd.lcd_display_string('                ', 1,0)
+        # mylcd.lcd_display_string('                ', 2,0)
+        # mylcd.lcd_display_string('                ', 3,0)
+        # mylcd.lcd_display_string('                ', 4,0)
+
         mylcd.lcd_display_string('PH: ', 1,0)
         mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
 
+        if EC_e != prev_ec:
+            mylcd.lcd_display_string('         ', 3,3)
+        
+        prev_ec = EC_e
+
+        mylcd.lcd_display_string('         ', 3,3)
         if read_sensor.sensor_data["ec_tds"] == False:
-            mylcd.lcd_display_string('EC: ', 1,8)
-            mylcd.lcd_display_string(str('%.1f' % EC*1000), 1,11)
-            mylcd.lcd_display_string('us/cm', 1,15)
+            mylcd.lcd_display_string('EC: ', 3,0)
+            mylcd.lcd_display_string(str('%.1f' % EC_e), 3,3)
+            mylcd.lcd_display_string('us/cm', 3,12)
         else:
-            mylcd.lcd_display_string('TDS: ', 1,7)
-            mylcd.lcd_display_string(str('%d' % TDS), 1,11)
-            mylcd.lcd_display_string('ppm', 1,16)
+            mylcd.lcd_display_string('TDS: ', 3,0)
+            mylcd.lcd_display_string(str('%d' % TDS), 3,3)
+            mylcd.lcd_display_string('ppm', 3,12)
 
         mylcd.lcd_display_string('Temp: ', 2,0)
-        mylcd.lcd_display_string(str('%.f' % TEMP), 2,5)
-        mylcd.lcd_display_string('Water:', 2,8)
+        mylcd.lcd_display_string(str('%.1f' % TEMP), 2,5)
+        mylcd.lcd_display_string('Water:', 2,10)
 
         if water == True:
-            mylcd.lcd_display_string("HIGH", 2,14)
+            mylcd.lcd_display_string("HIGH", 2,16)
         else:
-            mylcd.lcd_display_string("LOW ", 2,14)
+            mylcd.lcd_display_string("LOW ", 2,16)
         
-        mylcd.lcd_display_string('Stat: ', 4,7)
-        mylcd.lcd_display_string(stat, 4,12)
+        mylcd.lcd_display_string('Stat: ', 1,8)
+        mylcd.lcd_display_string(stat, 1,13)
         time.sleep(delay)
 
 def sensor_update(threadName, delay):
