@@ -1,4 +1,4 @@
-#main code
+# main code
 from asyncore import read
 import json
 import paho.mqtt.client as mqtt
@@ -11,14 +11,14 @@ import os
 import I2C_LCD_driver
 import pumps_state
 
-mylcd = I2C_LCD_driver.lcd() #lcd i2c
+mylcd = I2C_LCD_driver.lcd()  # lcd i2c
 
 # Opening JSON file
-#f = open(path_url+'config.json')  #for asus
-f = open('config.json') #for dev
+# f = open(path_url+'config.json')  #for asus
+f = open('config.json')  # for dev
 data = json.load(f)
 delay_device = (data['config']['delay_device'])
-delay_update = data['config']['delay_update'] 
+delay_update = data['config']['delay_update']
 connection_mode = data['config']['connection_mode']
 param_date_device = data['config']['param_date_device']
 param_name_1 = data['config']['param_name_1']
@@ -49,26 +49,30 @@ WAIT_CONNECTION_TIMEOUT = 10
 
 # We assume that all GPIOs are LOW
 # gpio_state = {7: False, 11: False, 12: False, 13: False, 15: False, 16: False, 18: False, 22: False, 29: False,
-            #   31: False, 32: False, 33: False, 35: False, 36: False, 37: False, 38: False, 40: False}
+#   31: False, 32: False, 33: False, 35: False, 36: False, 37: False, 38: False, 40: False}
 
 connected = False
+
 
 def millis():
     return time.time() * 1000
 
 # The callback for when the client receives a CONNACK response from the server.
+
+
 def on_connect(client, userdata, rc, *extra_params):
     print('Connected with result code ' + str(rc))
     # Subscribing to receive RPC requests
     client.subscribe('v1/devices/me/rpc/request/+')
+    client.subscribe('v1/devices/me/attributes')
     # Sending current GPIO status
     #client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
     client.publish('v1/devices/me/attributes', pumps_state.get_pumps(), 1)
     client.publish('v1/devices/me/attributes', pumps_state.get_led(), 1)
 
-
     global connected
     connected = True
+
 
 def on_disconnect(unused_client, unused_userdata, rc):
     """Paho callback for when a device disconnects."""
@@ -78,6 +82,7 @@ def on_disconnect(unused_client, unused_userdata, rc):
     global connected
     connected = False
 
+
 def on_publish(client, userdata, mid):
     """Paho callback when a message is sent to the broker."""
     print('on_publish')
@@ -86,8 +91,10 @@ def on_publish(client, userdata, mid):
     print()
 
 # The callback for when a PUBLISH message is received from the server.
+
+
 def on_message(client, userdata, msg):
-    print ('Topic: ' + msg.topic + '\nMessage: ' + str(msg.payload))
+    print('Topic: ' + msg.topic + '\nMessage: ' + str(msg.payload))
     # Decode JSON request
     data_in = json.loads(msg.payload)
     # Check request method
@@ -107,22 +114,30 @@ def on_message(client, userdata, msg):
     #     client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
     #     client.publish('v1/devices/me/attributes', get_pumps_status(), 1)
 
-    if data_in['method'] == 'set_water':
-        pumps_state.set_water(data_in['params'])
-    elif data_in['method'] == 'set_alkaline':
-        pumps_state.set_alkaline(data_in['params'])
-    elif data_in['method'] == 'set_acid':
-        pumps_state.set_acid(data_in['params'])
-    elif data_in['method'] == 'set_nutrient_a':
-        pumps_state.set_nutrient_a(data_in['params'])
-    elif data_in['method'] == 'set_nutrient_b':
-        pumps_state.set_nutrient_b(data_in['params'])
-    elif data_in['method'] == 'set_led':
-        pumps_state.set_led(data_in['params'])
-    elif data_in['method'] == 'set_ec_tds':
-        read_sensor.set_ec_tds(data_in['params'])
+    if msg.topic == 'v1/devices/me/attributes':
+        print("data atribut changed !")
+        print(data_in)
+        pumps_state.led_state['start_led'] = data_in['start_led']
+        pumps_state.led_state['end_led'] = data_in['end_led']
+        
     else:
-        client.publish(msg.topic.replace('request', 'response'), pumps_state.get_pumps(), 1)
+        if data_in['method'] == 'set_water':
+            pumps_state.set_water(data_in['params'])
+        elif data_in['method'] == 'set_alkaline':
+            pumps_state.set_alkaline(data_in['params'])
+        elif data_in['method'] == 'set_acid':
+            pumps_state.set_acid(data_in['params'])
+        elif data_in['method'] == 'set_nutrient_a':
+            pumps_state.set_nutrient_a(data_in['params'])
+        elif data_in['method'] == 'set_nutrient_b':
+            pumps_state.set_nutrient_b(data_in['params'])
+        elif data_in['method'] == 'set_led':
+            pumps_state.set_led(data_in['params'])
+        elif data_in['method'] == 'set_ec_tds':
+            read_sensor.set_ec_tds(data_in['params'])
+        else:
+            client.publish(msg.topic.replace('request', 'response'),
+            pumps_state.get_pumps(), 1)
 
 
 # def get_gpio_status():
@@ -162,6 +177,7 @@ water = 0
 date_time = ''
 water_info = ""
 
+
 def publish_events():
     """Publish an event."""
     print()
@@ -182,7 +198,7 @@ def publish_events():
 
     read_sensor.sensor_data['last_update'] = date_time
     read_sensor.sensor_data['PH_sensor'] = PH
-    
+
     if read_sensor.sensor_data["ec_tds"] == False:
         read_sensor.sensor_data['EC_sensor'] = EC*1000
     else:
@@ -196,26 +212,29 @@ def publish_events():
     # Publish something
     print("Publishing to Cloud Dashboard")
     print("data " + str(read_sensor.sensor_data))
-    print("Current delay update : %s second" %(delay_update))
+    print("Current delay update : %s second" % (delay_update))
     print()
     # Publish "payload" to the MQTT topic. qos=1 means at least once
     # delivery. Cloud IoT Core also supports qos=0 for at most once
     # delivery.
-    # message = client.publish(mqtt_topic, json.dumps(payload), qos=1)   
+    # message = client.publish(mqtt_topic, json.dumps(payload), qos=1)
     # message = client.publish('v1/devices/me/attributes', json.dumps(sensor_data), 1)
-    client.publish('v1/devices/me/attributes', json.dumps(read_sensor.sensor_data), 1)
+    client.publish('v1/devices/me/attributes',
+                   json.dumps(read_sensor.sensor_data), 1)
     # if message.wait_for_publish():
     #     release_client(client)
     #     return False
     # else:
     #     release_client(client)
 
+
 def sensor_handle():
-    global PH,EC,TEMP,water,TDS, EC_e, geser, EC_str
+    global PH, EC, TEMP, water, TDS, EC_e, geser, EC_str
     PH = read_sensor.read_ph() + float(calibrate_ph)
     EC = read_sensor.read_ec()
 
-    if EC < 1: EC = 0
+    if EC < 1:
+        EC = 0
 
     EC_e = EC * 1000
 
@@ -226,13 +245,15 @@ def sensor_handle():
         TEMP = read_sensor.get_temp()
     except Exception:
         TEMP = 25
-    water = True if read_sensor.read_water_level() == 0 else False  #bool(read_sensor.read_water_level())
+    # bool(read_sensor.read_water_level())
+    water = True if read_sensor.read_water_level() == 0 else False
+
 
 def sensor_live(threadName, delay):
     while True:
         global delay_device, delay_update
         global calibrate_ec, calibrate_ph, prev_ec
-        f = open('config.json') #for dev
+        f = open('config.json')  # for dev
         data = json.load(f)
         delay_device = (data['config']['delay_device'])
         delay_update = data['config']['delay_update']
@@ -246,7 +267,7 @@ def sensor_live(threadName, delay):
         print(pumps_state.pumps_info)
         print(pumps_state.led_state)
         print('///////////////////////////////////////////////////////////////////////////////////////\n')
-        
+
         response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
         if response == 0:
             stat = 'ONLINE '
@@ -259,54 +280,55 @@ def sensor_live(threadName, delay):
         # mylcd.lcd_display_string('                ', 3,0)
         # mylcd.lcd_display_string('                ', 4,0)
 
-        mylcd.lcd_display_string('PH: ', 1,0)
-        mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
+        mylcd.lcd_display_string('PH: ', 1, 0)
+        mylcd.lcd_display_string(str('%.1f' % PH), 1, 3)
 
         if EC_e != prev_ec:
-            mylcd.lcd_display_string('         ', 3,3)
-        
+            mylcd.lcd_display_string('         ', 3, 3)
+
         prev_ec = EC_e
 
-        mylcd.lcd_display_string('         ', 3,3)
+        mylcd.lcd_display_string('         ', 3, 3)
         if read_sensor.sensor_data["ec_tds"] == False:
-            mylcd.lcd_display_string('EC: ', 3,0)
-            mylcd.lcd_display_string(str('%.1f' % EC_e), 3,3)
-            mylcd.lcd_display_string('us/cm', 3,12)
+            mylcd.lcd_display_string('EC: ', 3, 0)
+            mylcd.lcd_display_string(str('%.1f' % EC_e), 3, 3)
+            mylcd.lcd_display_string('us/cm', 3, 12)
         else:
-            mylcd.lcd_display_string('TDS: ', 3,0)
-            mylcd.lcd_display_string(str('%d' % TDS), 3,3)
-            mylcd.lcd_display_string('ppm', 3,12)
+            mylcd.lcd_display_string('TDS: ', 3, 0)
+            mylcd.lcd_display_string(str('%d' % TDS), 3, 3)
+            mylcd.lcd_display_string('ppm', 3, 12)
 
-        mylcd.lcd_display_string('Temp: ', 2,0)
-        mylcd.lcd_display_string(str('%.1f' % TEMP), 2,5)
-        mylcd.lcd_display_string('Water:', 2,10)
+        mylcd.lcd_display_string('Temp: ', 2, 0)
+        mylcd.lcd_display_string(str('%.1f' % TEMP), 2, 5)
+        mylcd.lcd_display_string('Water:', 2, 10)
 
         if water == True:
-            mylcd.lcd_display_string("HIGH", 2,16)
+            mylcd.lcd_display_string("HIGH", 2, 16)
         else:
-            mylcd.lcd_display_string("LOW ", 2,16)
-        
-        mylcd.lcd_display_string('Stat: ', 1,8)
-        mylcd.lcd_display_string(stat, 1,13)
+            mylcd.lcd_display_string("LOW ", 2, 16)
+
+        mylcd.lcd_display_string('Stat: ', 1, 8)
+        mylcd.lcd_display_string(stat, 1, 13)
         time.sleep(delay)
+
 
 def sensor_update(threadName, delay):
     while True:
-        #Read sensor
+        # Read sensor
         sensor_handle()
         now = datetime.datetime.now()
         global date_time
         date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
-        print ("Current date and time : ")
-        print (date_time)
+        print("Current date and time : ")
+        print(date_time)
 
         response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
 
         if response == 0:
-            print ("********************************************************************")
+            print("********************************************************************")
             print(THINGSBOARD_HOST, 'is UP and reachable!')
-            print ("********************************************************************")
-            print ("\n")
+            print("********************************************************************")
+            print("\n")
             global connected
             connected = True
             if not publish_events():
@@ -315,42 +337,45 @@ def sensor_update(threadName, delay):
                 print("Failed send to dashboard")
 
         elif response == 2 or 256 or 512:
-            print ("********************************************************************")
+            print("********************************************************************")
             print(THINGSBOARD_HOST, 'is DOWN and No response from Server!')
-            print ("********************************************************************")
-            print ("\n")
+            print("********************************************************************")
+            print("\n")
             connected = False
             now = datetime.datetime.now()
             date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
-            print ("Current date and time : ")
-            print (date_time)
+            print("Current date and time : ")
+            print(date_time)
             print("Current delay : ")
             print(delay)
         else:
-            print ("********************************************************************")
+            print("********************************************************************")
             print(THINGSBOARD_HOST, 'is DOWN and Host Unreachable!')
-            print ("********************************************************************")
-            print ("\n")
+            print("********************************************************************")
+            print("\n")
             connected = False
             now = datetime.datetime.now()
             date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
-            print ("Current date and time : ")
-            print (date_time)
+            print("Current date and time : ")
+            print(date_time)
             print("Current delay : ")
             print(delay)
 
         time.sleep(int(delay))
 
+
 try:
     # while True:
     #     task_sensor = Thread(target=sensor_hendle(delay_device))
     #     task_sensor.start()
-    _thread .start_new_thread( sensor_live, ("Thread-sensor-live", int(delay_device), ) )
-    time.sleep(1) #fix bug lcd 
-    _thread .start_new_thread( sensor_update, ("Thread-sensor-update", int(delay_update), ) )
+    _thread .start_new_thread(
+        sensor_live, ("Thread-sensor-live", int(delay_device), ))
+    time.sleep(1)  # fix bug lcd
+    _thread .start_new_thread(
+        sensor_update, ("Thread-sensor-update", int(delay_update), ))
 
 except KeyboardInterrupt:
-    print ("Error: unable to start thread")
+    print("Error: unable to start thread")
 
 while 1:
     pass

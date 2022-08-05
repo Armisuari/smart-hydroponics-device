@@ -24,10 +24,13 @@ pumps_info = {
     'alkaline pump': False,
     'acid pump': False,
     'nutrient A': False,
-    'nutrient B': False,
+    'nutrient B': False
 }
 
-led_state = {'led_strip': False}
+led_state = {'led_strip': False,
+              'start_led': '0:0',
+              'end_led': '0:0'
+            }
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
