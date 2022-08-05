@@ -226,7 +226,7 @@ def sensor_handle():
         TEMP = read_sensor.get_temp()
     except Exception:
         TEMP = 25
-    water = bool(read_sensor.read_water_level())
+    water = True if read_sensor.read_water_level() == 0 else False  #bool(read_sensor.read_water_level())
 
 def sensor_live(threadName, delay):
     while True:

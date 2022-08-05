@@ -9,11 +9,7 @@ acid_pump = 19
 nutrient_a = 18
 nutrient_b = 12
 
-led_pin = {
-            23: False,
-            24: False,
-            8: False
-          }
+LED_strip = [8, 23, 24]
 
 pumps_state = {
                 water_pump: False,
@@ -39,7 +35,7 @@ GPIO.setwarnings(False)
 for pin in pumps_state:
     GPIO.setup(pin, GPIO.OUT)
 
-for pin in led_pin:
+for pin in LED_strip:
     GPIO.setup(pin, GPIO.OUT)
 
 def set_water(state):
@@ -79,14 +75,8 @@ def get_led():
     return json.dumps(led_state)
 
 def set_led(state):
-    if state == True:
-        GPIO.output(23, GPIO.HIGH)
-        GPIO.output(24, GPIO.HIGH)
-        GPIO.output(8, GPIO.HIGH)
-    else:
-        GPIO.output(23, GPIO.LOW)
-        GPIO.output(24, GPIO.LOW)
-        GPIO.output(8, GPIO.LOW)
+    for pin in LED_strip:
+        GPIO.output(pin, GPIO.HIGH if state == True else GPIO.LOW)
 
     print("LED IS ON") if state == True else print("LED IS OFF")
     led_state['led_strip'] = state
