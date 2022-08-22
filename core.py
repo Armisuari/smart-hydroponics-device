@@ -64,9 +64,11 @@ def on_connect(client, userdata, rc, *extra_params):
     print('Connected with result code ' + str(rc))
     # Subscribing to receive RPC requests
     client.subscribe('v1/devices/me/rpc/request/+')
-    client.subscribe('v1/devices/me/attributes')
+    client.subscribe('v1/devices/me/attributes/response/+')
+    # client.subscribe('v1/devices/me/attributes')
     # Sending current GPIO status
     #client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
+    # client.publish('v1/devices/me/attributes/request/1', '{"clientKeys":"start_led,end_led"}')
     client.publish('v1/devices/me/attributes', pumps_state.get_pumps(), 1)
     client.publish('v1/devices/me/attributes', pumps_state.get_led(), 1)
 
@@ -113,6 +115,9 @@ def on_message(client, userdata, msg):
     #     set_pumps_status(data_in['params']['pin'], data_in['params']['enabled'])
     #     client.publish(msg.topic.replace('request', 'response'), get_pumps_status(), 1)
     #     client.publish('v1/devices/me/attributes', get_pumps_status(), 1)
+    # print('////////////////////////////////////////////////////////')
+    # print(data_in['client']['start_led'])
+    # print('////////////////////////////////////////////////////////')
 
     if msg.topic == 'v1/devices/me/attributes':
         print("data atribut changed !")
@@ -120,24 +125,25 @@ def on_message(client, userdata, msg):
         pumps_state.led_state['start_led'] = data_in['start_led']
         pumps_state.led_state['end_led'] = data_in['end_led']
         
+    
+    if data_in['method'] == 'set_water':
+        pumps_state.set_water(data_in['params'])
+    elif data_in['method'] == 'set_alkaline':
+        pumps_state.set_alkaline(data_in['params'])
+    elif data_in['method'] == 'set_acid':
+        pumps_state.set_acid(data_in['params'])
+    elif data_in['method'] == 'set_nutrient_a':
+        pumps_state.set_nutrient_a(data_in['params'])
+    elif data_in['method'] == 'set_nutrient_b':
+        pumps_state.set_nutrient_b(data_in['params'])
+    elif data_in['method'] == 'set_led':
+        pumps_state.set_led(data_in['params'])
+    elif data_in['method'] == 'set_ec_tds':
+        read_sensor.set_ec_tds(data_in['params'])
     else:
-        if data_in['method'] == 'set_water':
-            pumps_state.set_water(data_in['params'])
-        elif data_in['method'] == 'set_alkaline':
-            pumps_state.set_alkaline(data_in['params'])
-        elif data_in['method'] == 'set_acid':
-            pumps_state.set_acid(data_in['params'])
-        elif data_in['method'] == 'set_nutrient_a':
-            pumps_state.set_nutrient_a(data_in['params'])
-        elif data_in['method'] == 'set_nutrient_b':
-            pumps_state.set_nutrient_b(data_in['params'])
-        elif data_in['method'] == 'set_led':
-            pumps_state.set_led(data_in['params'])
-        elif data_in['method'] == 'set_ec_tds':
-            read_sensor.set_ec_tds(data_in['params'])
-        else:
-            client.publish(msg.topic.replace('request', 'response'),
-            pumps_state.get_pumps(), 1)
+        client.publish(msg.topic.replace('request', 'response'), pumps_state.get_pumps(), 1)
+
+        # if data_in['client']
 
 
 # def get_gpio_status():
