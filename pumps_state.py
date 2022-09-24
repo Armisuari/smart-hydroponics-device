@@ -1,4 +1,4 @@
-#pumps state
+# pumps state
 import RPi.GPIO as GPIO
 import json
 
@@ -12,12 +12,12 @@ nutrient_b = 12
 LED_strip = [8, 23, 24]
 
 pumps_state = {
-                water_pump: False,
-                alkaline_pump: False,
-                acid_pump: False,
-                nutrient_a: False,
-                nutrient_b: False 
-              }
+    water_pump: False,
+    alkaline_pump: False,
+    acid_pump: False,
+    nutrient_a: False,
+    nutrient_b: False
+}
 
 pumps_info = {
     'water pump': False,
@@ -28,9 +28,9 @@ pumps_info = {
 }
 
 led_state = {'led_strip': False,
-              'start_led': '0:0',
-              'end_led': '0:0'
-            }
+             'start_led': '0:0',
+             'end_led': '0:0'
+             }
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -41,17 +41,21 @@ for pin in pumps_state:
 for pin in LED_strip:
     GPIO.setup(pin, GPIO.OUT)
 
+
 def set_water(state):
     GPIO.output(water_pump, GPIO.HIGH if state == True else GPIO.LOW)
     print("WATER PUMP IS ON") if state == True else print("WATER PUMP IS OFF")
     pumps_state[water_pump] = state
     pumps_info['water pump'] = state
 
+
 def set_alkaline(state):
     GPIO.output(alkaline_pump, GPIO.HIGH if state == True else GPIO.LOW)
-    print("ALKALINE PUMP IS ON") if state == True else print("ALKALINE PUMP IS OFF")
+    print("ALKALINE PUMP IS ON") if state == True else print(
+        "ALKALINE PUMP IS OFF")
     pumps_state[alkaline_pump] = state
     pumps_info['alkaline pump'] = state
+
 
 def set_acid(state):
     GPIO.output(acid_pump, GPIO.HIGH if state == True else GPIO.LOW)
@@ -59,27 +63,35 @@ def set_acid(state):
     pumps_state[acid_pump] = state
     pumps_info['acid pump'] = state
 
+
 def set_nutrient_a(state):
     GPIO.output(nutrient_a, GPIO.HIGH if state == True else GPIO.LOW)
-    print("NUTRIENT A PUMP IS ON") if state == True else print("NUTRIENT A PUMP IS OFF")
+    print("NUTRIENT A PUMP IS ON") if state == True else print(
+        "NUTRIENT A PUMP IS OFF")
     pumps_state[nutrient_a] = state
     pumps_info['nutrient A'] = state
 
+
 def set_nutrient_b(state):
     GPIO.output(nutrient_b, GPIO.HIGH if state == True else GPIO.LOW)
-    print("NUTRIENT B PUMP IS ON") if state == True else print("NUTRIENT B PUMP IS OFF")
+    print("NUTRIENT B PUMP IS ON") if state == True else print(
+        "NUTRIENT B PUMP IS OFF")
     pumps_state[nutrient_b] = state
     pumps_info['nutrient B'] = state
+
 
 def get_pumps():
     return json.dumps(pumps_state)
 
+
 def get_led():
     return json.dumps(led_state)
 
+
 def set_led(state):
     for pin in LED_strip:
-        GPIO.output(pin, GPIO.HIGH if state == True else GPIO.LOW)
-
-    print("LED IS ON") if state == True else print("LED IS OFF")
+        GPIO.output(pin, GPIO.HIGH if state == True else GPIO.LOW) #LED ON
+        
+    
+    # print("LED IS ON") if state == True else print("LED IS OFF")
     led_state['led_strip'] = state
