@@ -58,6 +58,12 @@ WAIT_CONNECTION_TIMEOUT = 10
 
 connected = False
 
+desired_val = {'pH': 0, 'EC': 0}
+
+
+def get_desired_value():
+    return json.dumps(desired_val)
+
 
 def millis():
     return time.time() * 1000
@@ -75,7 +81,10 @@ def on_connect(client, userdata, rc, *extra_params):
     #client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
     client.publish('v1/devices/me/attributes/request/1',
                    '{"sharedKeys":"start_led,end_led"}')
+    client.publish('v1/devices/me/attributes/request/1',
+                   '{"sharedKeys":"pH,EC"}')
     client.publish('v1/devices/me/attributes', pumps_state.get_pumps(), 1)
+    # client.publish('v1/devices/me/attributes', get_desired_value(), 1)
     # client.publish('v1/devices/me/attributes', pumps_state.get_led(), 1)
 
     global connected
@@ -127,15 +136,29 @@ def on_message(client, userdata, msg):
 
     if msg.topic == 'v1/devices/me/attributes/response/1':
         logging.debug(data_in)
-        pumps_state.led_state['start_led'] = data_in['shared']['start_led']
-        pumps_state.led_state['end_led'] = data_in['shared']['end_led']
-        # time.sleep(3)
+
+        if list(data_in['shared'])[0] == 'pH':
+            desired_val['pH'] = data_in['shared']['pH']
+        elif list(data_in['shared'])[0] == 'EC':
+            desired_val['EC'] = data_in['shared']['EC']
+        else:
+            pumps_state.led_state['start_led'] = data_in['shared']['start_led']
+            pumps_state.led_state['end_led'] = data_in['shared']['end_led']
+            # time.sleep(3)
 
     elif msg.topic == 'v1/devices/me/attributes':
         logging.debug("data atribut changed !")
         logging.debug(data_in)
-        pumps_state.led_state['start_led'] = data_in['start_led']
-        pumps_state.led_state['end_led'] = data_in['end_led']
+
+        if list(data_in)[0] == 'EC':
+            desired_val['EC'] = data_in['EC']
+        elif list(data_in)[0] == 'pH':
+            desired_val['pH'] = data_in['pH']
+        else:
+            pumps_state.led_state['start_led'] = data_in['start_led']
+            pumps_state.led_state['end_led'] = data_in['end_led']
+
+        logging.debug(desired_val)
 
     else:
 
@@ -259,6 +282,7 @@ def LED_handle(threadName, delay):
         if now.hour == int(end_split[0]) and now.minute == int(end_split[1]) and now.second == 0:
             pumps_state.set_led(False)
 
+
 def sensor_realtime():
     global PH, EC, TEMP, water, TDS, EC_e, geser, EC_str
     PH = read_sensor.read_ph() + float(calibrate_ph)
@@ -295,10 +319,12 @@ def sensor_live(threadName, delay):
         sensor_realtime()
 
         logging.debug("running local...")
-        logging.debug('\n\n///////////////////////////////////////Pumps state/////////////////////////////////')
+        logging.debug(
+            '\n\n///////////////////////////////////////Pumps state/////////////////////////////////')
         logging.debug(pumps_state.pumps_info)
         logging.debug(pumps_state.led_state)
-        logging.debug('///////////////////////////////////////////////////////////////////////////////////////\n')
+        logging.debug(
+            '///////////////////////////////////////////////////////////////////////////////////////\n')
 
         response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
         if response == 0:
@@ -341,6 +367,10 @@ def sensor_live(threadName, delay):
 
         mylcd.lcd_display_string('Stat: ', 1, 8)
         mylcd.lcd_display_string(stat, 1, 13)
+
+        mylcd.lcd_display_string('Des: ', 4, 0)
+        mylcd.lcd_display_string('pH='+str(desired_val['pH']) +
+                                 ' EC='+str(desired_val['EC']), 4, 5)
         time.sleep(delay)
 
 
@@ -357,21 +387,27 @@ def sensor_update(threadName, delay):
         response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
 
         if response == 0:
-            logging.debug("********************************************************************")
+            logging.debug(
+                "********************************************************************")
             logging.debug(THINGSBOARD_HOST + ' is UP and reachable!')
-            logging.debug("********************************************************************")
+            logging.debug(
+                "********************************************************************")
             logging.debug("\n")
             global connected
             connected = True
             if not publish_events():
-                logging.debug("Succes send to dashboard" + str(now) + " " + str(now.hour))
+                logging.debug("Succes send to dashboard" +
+                              str(now) + " " + str(now.hour))
             else:
                 logging.debug("Failed send to dashboard")
 
         elif response == 2 or 256 or 512:
-            logging.debug("********************************************************************")
-            logging.debug(THINGSBOARD_HOST + ' is DOWN and No response from Server!')
-            logging.debug("********************************************************************")
+            logging.debug(
+                "********************************************************************")
+            logging.debug(THINGSBOARD_HOST +
+                          ' is DOWN and No response from Server!')
+            logging.debug(
+                "********************************************************************")
             logging.debug("\n")
             connected = False
             now = datetime.datetime.now()
@@ -381,9 +417,11 @@ def sensor_update(threadName, delay):
             logging.debug("Current delay : ")
             logging.debug(delay)
         else:
-            logging.debug("********************************************************************")
+            logging.debug(
+                "********************************************************************")
             logging.debug(THINGSBOARD_HOST, 'is DOWN and Host Unreachable!')
-            logging.debug("********************************************************************")
+            logging.debug(
+                "********************************************************************")
             logging.debug("\n")
             connected = False
             now = datetime.datetime.now()
