@@ -3,6 +3,7 @@
 from asyncore import read
 from enum import Flag
 import json
+from telnetlib import EC
 import paho.mqtt.client as mqtt
 from threading import Thread
 import _thread
@@ -13,8 +14,18 @@ import os
 import I2C_LCD_driver
 import pumps_state
 import logging
+import sys
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger('')
+logger.setLevel(logging.DEBUG)
+fh = logging.FileHandler('/home/comitup/Smart-Hydroponics/log_info.log')
+sh = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter(
+    '[%(asctime)s] %(levelname)s [%(filename)s.%(funcName)s:%(lineno)d] %(message)s', datefmt='%a, %d %b %Y %H:%M:%S')
+fh.setFormatter(formatter)
+sh.setFormatter(formatter)
+logger.addHandler(fh)
+logger.addHandler(sh)
 
 mylcd = I2C_LCD_driver.lcd()  # lcd i2c
 
@@ -57,6 +68,7 @@ WAIT_CONNECTION_TIMEOUT = 10
 #   31: False, 32: False, 33: False, 35: False, 36: False, 37: False, 38: False, 40: False}
 
 connected = False
+TDS = 0
 
 desired_val = {'pH': 0, 'EC': 0}
 
@@ -137,10 +149,12 @@ def on_message(client, userdata, msg):
     if msg.topic == 'v1/devices/me/attributes/response/1':
         logging.debug(data_in)
 
-        if list(data_in['shared'])[0] == 'pH':
+        if list(data_in['shared'])[0] == 'pH' or list(data_in['shared'])[0] == 'EC':
             desired_val['pH'] = data_in['shared']['pH']
-        elif list(data_in['shared'])[0] == 'EC':
             desired_val['EC'] = data_in['shared']['EC']
+            logging.debug('store desired pH & EC from platform...')
+        # elif list(data_in['shared'])[0] == 'EC':
+        #     logging.debug('store desired EC from platform...')
         else:
             pumps_state.led_state['start_led'] = data_in['shared']['start_led']
             pumps_state.led_state['end_led'] = data_in['shared']['end_led']
@@ -159,6 +173,7 @@ def on_message(client, userdata, msg):
             pumps_state.led_state['end_led'] = data_in['end_led']
 
         logging.debug(desired_val)
+        # mylcd.lcd_clear()
 
     else:
 
@@ -180,6 +195,8 @@ def on_message(client, userdata, msg):
         else:
             client.publish(msg.topic.replace(
                 'request', 'response'), pumps_state.get_pumps(), 1)
+
+    #mylcd.lcd_clear()
 
 
 # def get_gpio_status():
@@ -210,21 +227,14 @@ client.username_pw_set(ACCESS_TOKEN)
 client.connect(THINGSBOARD_HOST, 1883, 60)
 client.loop_start()
 
-PH = 0.0
-EC = 0.0
-TDS = 0
-TEMP = 0.0
-prev_ec = 0.0
-water = 0
-date_time = ''
-water_info = ""
-
 
 def publish_events():
+    global TDS
+    
     """Publish an event."""
     # logging.debug()
     logging.debug("Publish Events")
-    logging.debug("================================================")
+    # logging.debug("================================================")
     # logging.debug()
 
     # client = get_client()
@@ -238,18 +248,18 @@ def publish_events():
     #            "{}".format(param_name_3):data_3,
     #            "{}".format(param_name_4):data_4,}
 
-    read_sensor.sensor_data['last_update'] = date_time
-    read_sensor.sensor_data['PH_sensor'] = PH
+    read_sensor.sensor_data['last_update'] = log_attribute['date_time']
+    read_sensor.sensor_data['PH_sensor'] = log_attribute['PH']
 
     if read_sensor.sensor_data["ec_tds"] == False:
-        read_sensor.sensor_data['EC_sensor'] = EC*1000
+        read_sensor.sensor_data['EC_sensor'] = log_attribute['EC']*1000
     else:
-        read_sensor.sensor_data['EC_sensor'] = int(TDS)
+        read_sensor.sensor_data['EC_sensor'] = TDS
 
-    read_sensor.sensor_data['TEMP_sensor'] = TEMP
+    read_sensor.sensor_data['TEMP_sensor'] = log_attribute['TEMP']
 
-    water_info = "HIGH" if water == True else "LOW"
-    read_sensor.sensor_data['water_state'] = water_info
+    log_attribute['water_info'] = "OK" if log_attribute['water'] == True else "LOW"
+    read_sensor.sensor_data['water_state'] = log_attribute['water_info']
 
     # Publish something
     logging.debug("Publishing to Cloud Dashboard")
@@ -278,36 +288,41 @@ def LED_handle(threadName, delay):
 
         if now.hour == int(start_split[0]) and now.minute == int(start_split[1]) and now.second == 0:
             pumps_state.set_led(True)
+            logging.debug('LED ON')
 
         if now.hour == int(end_split[0]) and now.minute == int(end_split[1]) and now.second == 0:
             pumps_state.set_led(False)
+            logging.debug('LED OFF')
 
+        time.sleep(delay)
+
+log_attribute = {'PH':0.0, 'EC':0.0, 'TEMP': 0.0,
+                 'prev_ec':0, 'water':False,
+                 'date_time':'', 'water_info':''}
 
 def sensor_realtime():
-    global PH, EC, TEMP, water, TDS, EC_e, geser, EC_str
-    PH = read_sensor.read_ph() + float(calibrate_ph)
-    EC = read_sensor.read_ec()
+    global TDS
 
-    if EC < 1:
-        EC = 0
+    log_attribute['PH'] = read_sensor.read_ph() + float(calibrate_ph)
+    log_attribute['EC'] = read_sensor.read_ec()
 
-    EC_e = EC * 1000
+    if log_attribute['PH'] > 20: log_attribute['PH'] = 0
+    if log_attribute['EC'] < 1: log_attribute['EC'] = 0
 
-    EC_str = str(EC_e)
-
-    TDS = EC*500
+    TDS = log_attribute['EC']*500
     try:
-        TEMP = read_sensor.get_temp()
+        log_attribute['TEMP'] = read_sensor.get_temp()
     except Exception:
-        TEMP = 25
+        log_attribute['TEMP'] = 25
     # bool(read_sensor.read_water_level())
-    water = True if read_sensor.read_water_level() == 0 else False
+    log_attribute['water'] = True if read_sensor.read_water_level() == 0 else False
 
 
 def sensor_live(threadName, delay):
     while True:
         global delay_device, delay_update
-        global calibrate_ec, calibrate_ph, prev_ec
+        global calibrate_ec, calibrate_ph
+        global TDS
         f = open('/home/comitup/Smart-Hydroponics/config.json')  # for dev
         data = json.load(f)
         delay_device = (data['config']['delay_device'])
@@ -319,12 +334,12 @@ def sensor_live(threadName, delay):
         sensor_realtime()
 
         logging.debug("running local...")
-        logging.debug(
-            '\n\n///////////////////////////////////////Pumps state/////////////////////////////////')
+        # logging.debug(
+        # '\n\n///////////////////////////////////////Pumps state/////////////////////////////////')
         logging.debug(pumps_state.pumps_info)
         logging.debug(pumps_state.led_state)
-        logging.debug(
-            '///////////////////////////////////////////////////////////////////////////////////////\n')
+        # logging.debug(
+        # '///////////////////////////////////////////////////////////////////////////////////////\n')
 
         response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
         if response == 0:
@@ -339,12 +354,13 @@ def sensor_live(threadName, delay):
         # mylcd.lcd_display_string('                ', 4,0)
 
         mylcd.lcd_display_string('PH: ', 1, 0)
-        mylcd.lcd_display_string(str('%.1f' % PH), 1, 3)
-
-        if EC_e != prev_ec:
+        mylcd.lcd_display_string(str('%.1f' % log_attribute['PH']), 1, 3)
+        
+        EC_e=log_attribute['EC'] * 1000
+        if EC_e != log_attribute['prev_ec']:
             mylcd.lcd_display_string('         ', 3, 3)
 
-        prev_ec = EC_e
+        log_attribute['prev_ec'] = EC_e
 
         mylcd.lcd_display_string('         ', 3, 3)
         if read_sensor.sensor_data["ec_tds"] == False:
@@ -357,11 +373,11 @@ def sensor_live(threadName, delay):
             mylcd.lcd_display_string('ppm  ', 3, 12)
 
         mylcd.lcd_display_string('Temp: ', 2, 0)
-        mylcd.lcd_display_string(str('%.1f' % TEMP), 2, 5)
+        mylcd.lcd_display_string(str('%.1f' % log_attribute['TEMP']), 2, 5)
         mylcd.lcd_display_string('Water:', 2, 10)
 
-        if water == True:
-            mylcd.lcd_display_string("HIGH", 2, 16)
+        if log_attribute['water'] == True:
+            mylcd.lcd_display_string("OK ", 2, 16)
         else:
             mylcd.lcd_display_string("LOW ", 2, 16)
 
@@ -370,7 +386,7 @@ def sensor_live(threadName, delay):
 
         mylcd.lcd_display_string('Des: ', 4, 0)
         mylcd.lcd_display_string('pH='+str(desired_val['pH']) +
-                                 ' EC='+str(desired_val['EC']), 4, 5)
+                                 ' EC='+str(desired_val['EC'])+'  ', 4, 5)
         time.sleep(delay)
 
 
@@ -379,20 +395,19 @@ def sensor_update(threadName, delay):
         # Read sensor
         sensor_realtime()
         now = datetime.datetime.now()
-        global date_time
-        date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
+        log_attribute['date_time'] = now.strftime("%Y-%m-%dT%H:%M:%S")
         logging.debug("Current date and time : ")
-        logging.debug(date_time)
+        logging.debug(log_attribute['date_time'])
 
         response = os.system("sudo ping -c 1 -W 3 " + THINGSBOARD_HOST)
 
         if response == 0:
-            logging.debug(
-                "********************************************************************")
+            # logging.debug(
+            #     "********************************************************************")
             logging.debug(THINGSBOARD_HOST + ' is UP and reachable!')
-            logging.debug(
-                "********************************************************************")
-            logging.debug("\n")
+            # logging.debug(
+            #     "********************************************************************")
+            # logging.debug("\n")
             global connected
             connected = True
             if not publish_events():
@@ -402,49 +417,64 @@ def sensor_update(threadName, delay):
                 logging.debug("Failed send to dashboard")
 
         elif response == 2 or 256 or 512:
-            logging.debug(
-                "********************************************************************")
+            # logging.debug(
+            #     "********************************************************************")
             logging.debug(THINGSBOARD_HOST +
                           ' is DOWN and No response from Server!')
-            logging.debug(
-                "********************************************************************")
-            logging.debug("\n")
+            # logging.debug(
+            #     "********************************************************************")
+            # logging.debug("\n")
             connected = False
             now = datetime.datetime.now()
-            date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
+            log_attribute['date_time'] = now.strftime("%Y-%m-%dT%H:%M:%S")
             logging.debug("Current date and time : ")
-            logging.debug(date_time)
+            logging.debug(log_attribute['date_time'])
             logging.debug("Current delay : ")
             logging.debug(delay)
         else:
-            logging.debug(
-                "********************************************************************")
+            # logging.debug(
+            #     "********************************************************************")
             logging.debug(THINGSBOARD_HOST, 'is DOWN and Host Unreachable!')
-            logging.debug(
-                "********************************************************************")
-            logging.debug("\n")
+            # logging.debug(
+            #     "********************************************************************")
+            # logging.debug("\n")
             connected = False
             now = datetime.datetime.now()
-            date_time = now.strftime("%Y-%m-%dT%H:%M:%S")
+            log_attribute['date_time'] = now.strftime("%Y-%m-%dT%H:%M:%S")
             logging.debug("Current date and time : ")
-            logging.debug(date_time)
+            logging.debug(log_attribute['date_time'])
             logging.debug("Current delay : ")
             logging.debug(delay)
 
         time.sleep(int(delay))
 
+water_state = False
+def water_pump(threadName, delay):
+    logging.debug(threadName)
+    global water_state
+
+    while True:
+        water_state = True if water_state == False else False
+        pumps_state.set_water(water_state)
+        logging.debug('water state: ' + str(water_state))
+        time.sleep(delay*60)
+
+def pH_handle(threadName, delay):
+    logging.debug(threadName)
+    global water_state
+
+
 
 try:
-    # while True:
-    #     task_sensor = Thread(target=sensor_hendle(delay_device))
-    #     task_sensor.start()
     _thread .start_new_thread(
         sensor_live, ("Thread-sensor-live", int(delay_device), ))
-    time.sleep(1)  # fix bug lcd
+    # time.sleep(1)  # fix bug lcd
     _thread .start_new_thread(
         sensor_update, ("Thread-sensor-update", int(delay_update), ))
     _thread.start_new_thread(
         LED_handle, ("Thread-LED-handle", 1))
+    _thread.start_new_thread(
+        water_pump, ("Thread-water-pumps", 1))
 
 except KeyboardInterrupt:
     logging.debug("Error: unable to start thread")
