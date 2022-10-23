@@ -46,10 +46,9 @@ try:
 except Exception:
 	pass
 
-sensor_data = { 
-                "PH_sensor" : 0, "EC_sensor" : 0, "TEMP_sensor" : 0,
-                "water_state" : "LOW", "last_update": "", "ec_tds": False
-              }
+sensor_data = { "water_state" : "LOW", "last_update": "", "ec_tds": False }
+
+ec_tds_state = False
 
 def set_ec_tds(state):
 	sensor_data["ec_tds"] = state
@@ -69,6 +68,7 @@ def get_temp():
 def read_ph():
 	adc0 = ads1115.read_voltage(0)
 	PH = ph.readPH(adc0['r'])
+	# PH = (-0.004962*adc0['r']) + 19.85
 	# print("PH: %.1f" %(PH))
 	# mylcd.lcd_display_string('PH: ', 1,0)
 	# mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
@@ -86,7 +86,7 @@ def read_ec():
 	# mylcd.lcd_display_string('Temp: ', 2,0)
 	# mylcd.lcd_display_string(str('%.1f' % temperature), 2,5)
 	# print("Temperature:%.1f ^C EC:%.2f ms/cm " %(temperature,EC))
-	return EC
+	return EC * 1000 #for in us/cm
 
 def read_water_level():
 	water = GPIO.input(water_level)

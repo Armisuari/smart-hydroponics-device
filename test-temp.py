@@ -10,12 +10,12 @@ import os
 import glob
 import paho.mqtt.client as mqtt
 import os
-from wifi import Cell, Scheme
-import subprocess
+# from wifi import Cell, Scheme
+# import subprocess
 from DFRobot_ADS1115 import ADS1115
 from GreenPonik_EC import GreenPonik_EC
-from GreenPonik_PH import GreenPonik_PH
-import urllib.request
+# from GreenPonik_PH import GreenPonik_PH
+# import urllib.request
 import I2C_LCD_driver
 
 os.system('modprobe w1-gpio')

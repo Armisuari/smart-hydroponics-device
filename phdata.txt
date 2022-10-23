@@ -1,2 +1,2 @@
-neutralVoltage=2700
-acidVoltage=3100
+neutralVoltage=2694
+acidVoltage=3350

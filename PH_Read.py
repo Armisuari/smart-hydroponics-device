@@ -18,6 +18,8 @@ ads1115 = ADS1115()
 ph = GreenPonik_PH()
 ph.begin()
 
+PH_array = [0.0, 0.0, 0.0, 0.0, 0.0]
+V_array = [0.0, 0.0, 0.0, 0.0, 0.0]
 
 def read_ph():
     global ads1115
@@ -29,11 +31,26 @@ def read_ph():
     ads1115.set_gain(ADS1115_REG_CONFIG_PGA_6_144V)
     # Get the Digital Value of Analog of selected channel
     #adc0 = ads1115.readVoltage(0)
-    adc0 = ads1115.read_voltage(0)
     # Convert voltage to pH
-    PH = ph.readPH(adc0['r'])
-    print("PH:%.2f Voltage:%2.f " % (PH, adc0['r']))
-    return PH, adc0['r']
+    # adc0 = ads1115.read_voltage(0)
+    # PH = ph.readPH(adc0['r'])
+    for i in range(0,5):
+        adc0 = ads1115.read_voltage(0)
+        V_array[i] = adc0['r']
+        # PH_array[i] = ph.readPH(adc0['r'])
+        # print(PH_array[i])
+        time.sleep(0.3)
+
+    print(V_array)
+
+    voltage = (V_array[0] + V_array[1] + V_array[2] + V_array[3] + V_array[4]) / 5
+    # PH = (PH_array[0] + PH_array[1] + PH_array[2] + PH_array[3] + PH_array[4]) / 5
+
+    PH = -0.004944*voltage + 20.29
+    # PH = ph.readPH(voltage)
+
+    print("PH:%.1f Voltage:%2.f " % (PH, voltage))
+    # return PH, adc0['r']
 
 
 if __name__ == "__main__":

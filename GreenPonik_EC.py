@@ -43,7 +43,8 @@ class GreenPonik_EC():
         global _kvalueLow
         global _kvalueHigh
         global _kvalue
-        rawEC = 1000*voltage/820.0/200.0
+        # rawEC = 1000*voltage/820.0/200.0
+        rawEC = 1000*voltage/1630.0/1010.0
         print(">>>current rawEC is: %.3f" % rawEC)
         valueTemp = rawEC * _kvalue
         if(valueTemp > 2.5):
@@ -55,10 +56,12 @@ class GreenPonik_EC():
         return value
 
     def KvalueTempCalculation(self, compECsolution, voltage):
-        return 820.0*200.0*compECsolution/1000.0/voltage
+        # return 820.0*200.0*compECsolution/1000.0/voltage
+        return 1630.0*1010.0*compECsolution/1000.0/voltage
 
     def calibration(self, voltage, temperature):
-        rawEC = 1000*voltage/820.0/200.0
+        # rawEC = 1000*voltage/820.0/200.0
+        rawEC = 1000*voltage/1630.0/1010.0
         print(">>>current rawEC is: %.3f" % rawEC)
         if (rawEC > 0.8 and rawEC < 2.1):  # automated 1.413 buffer solution dection
             compECsolution = 1.413*(1.0+0.0185*(temperature-25.0))
@@ -107,6 +110,7 @@ class GreenPonik_EC():
             f.writelines(flist)
             f.close()
             status_msg = ">>>EC:12.88ms/cm Calibration completed,Please enter Ctrl+C exit calibration in 5 seconds"
+            
             print(status_msg)
             time.sleep(5.0)
             cal_res = {'status': 1288,

@@ -27,7 +27,7 @@ ec.begin()
 ph.begin()
 
 #mylcd.lcd_display_string(' Smart Hydroponics! ', 1,0)
-
+V_array = [0.0, 0.0, 0.0, 0.0, 0.0]
 
 def read_ph_ec():
 	global ads1115
@@ -39,20 +39,22 @@ def read_ph_ec():
 	#Sets the gain and input voltage range.
 	ads1115.set_gain(ADS1115_REG_CONFIG_PGA_6_144V)
 	#Get the Digital Value of Analog of selected channel
-	adc0 = ads1115.read_voltage(0)
+	for i in range(0,5):
+		adc0 = ads1115.read_voltage(0)
+		V_array[i] = adc0['r']
+		time.sleep(0.3)
+
 	adc1 = ads1115.read_voltage(1)
 	#Convert voltage to EC with temperature compensation
-	EC = ec.readEC(adc1['r'],temperature)
-	PH = ph.readPH(adc0['r'])
+	voltage = (V_array[0] + V_array[1] + V_array[2] + V_array[3] + V_array[4]) / 5
+
+	EC = ec.readEC(adc1['r'],temperature) * 1000
+	# PH = ph.readPH(adc0['r'])
+	PH = -0.004944*voltage + 20.29
     
-	mylcd.lcd_display_string('PH: ', 1,0)
-	mylcd.lcd_display_string(str('%.1f' % PH), 1,3)
-	mylcd.lcd_display_string('EC: ', 1,7)
-	mylcd.lcd_display_string(str('%.1f' % EC), 1,10)
-	mylcd.lcd_display_string('ms/cm', 1,14)
+	mylcd.lcd_display_string('PH:' + str(round(PH,1)) + ' EC:' + str(int(EC)) + 'us/cm', 1,0)
     
-	print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f " %(temperature,EC,PH))
-	return temperature, EC, PH
+	print("Temperature:%.1f ^C EC:%.f ms/cm PH:%.1f " %(temperature,EC,PH))
 
 
 if __name__ == "__main__":
